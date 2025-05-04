@@ -214,7 +214,7 @@
 
 ### 3.3 專案管理定義（What is Project Management?）
 
-* 將**知識（Knowledge）**、**技能（Skills）**、**工具（Tools）**與**技術（Techniques）**應用於專案活動
+* 將**知識（Knowledge）**、**技能（Skills）**、**工具（Tools）**與**技術（Techniques）** 應用於專案活動
 * 目的：滿足或超越利害關係人（Stakeholders）的需求與期望
 * 利害關係人：因專案結果可能獲益或受損的任何人
 
