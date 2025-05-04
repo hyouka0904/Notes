@@ -548,3 +548,114 @@
 
 * 遵循組織標準；依熟悉度、可靠度、客戶需求而定
 * 較小專案可採專家判斷（Delphi）、大專案宜結合多種方法
+
+# 第六章 
+
+## 6.1 成本分析（Cost Analysis）
+
+* 定義：針對軟體系統未來成本進行預測與量化的分析工作，既是藝術（Art）也是科學（Science）
+* 目的：將需求與功能轉換為預算要求，提供可執行工作的成本基礎
+
+## 6.2 軟體成本估算（Cost Estimation）
+
+* 核心：預測開發所需的人力（Effort）與時間（Schedule）
+* 模型：運用數學演算法，將系統規模（Size，如 LOC、FP）與複雜度（Complexity，如 Cyclomatic complexity）轉換為成本
+
+## 6.3 軟體成本要素（Software Cost Components）
+
+* **硬體與軟體成本（Hardware & Software）**：伺服器、授權費
+* **轉換與安裝成本（Conversion & Installation）**：資料轉換、部署作業
+* **旅費與訓練成本（Travel & Training）**
+* **人力成本（Effort Costs）**：工程師薪資、社保與保險
+
+  * 另須考慮辦公場地、水電、網路、共用設施等間接開銷
+
+## 6.4 成本元素結構（Cost Element Structure, CES）
+
+* 類似 WBS，建立分層樹狀結構，避免重複計算
+* 可在不同層級彙總與解析預算
+* 範例：
+
+  ```
+  1. 人力成本  
+     1.1 需求分析  
+     1.2 設計與實作  
+     1.3 測試  
+  2. 基礎設施  
+     2.1 硬體  
+     2.2 網路  
+  3. 其它  
+     3.1 培訓  
+     3.2 差旅  
+  ```
+
+## 6.5 估算方法（Estimation Techniques）
+
+* **Bottom-Up（自下而上）**：從最低層元件估算後加總；精準但易漏算整合/文件成本
+* **Top-Down（自上而下）**：依整體功能分配成本；納入系統級活動但可能低估低階技術難題
+* **Parkinson’s Law**：工作量會填滿可用時間 → Effort = 人數 × 時間
+* **專家判斷（Expert Judgment）**：多位領域專家迭代共識（如 Delphi）；成本低廉但需經驗豐富
+* **類比法（Analogy）**：以過去類似專案平均成本推估；精準度取決於相似度與資料庫維護情況
+* **Make/Buy 決策（Make/Buy Decision）**：自建 vs 採購 vs 修改 COTS；可結合決策樹分析
+* **參數化/演算法式（Parametric / Algorithmic）**：如 COCOMO、SLIM，以統計回歸模型自動計算
+
+## 6.6 SLIM（Putnam’s Software Life-cycle Model）
+
+* 概念：依 Rayleigh 分布模擬人力投入曲線
+* 公式：
+  
+  $$m(t) = 2 \cdot a \cdot K \cdot t \cdot e^{-a \cdot t^2}$$
+  
+
+  * K：總人力（staff-years）
+  * a：技術常數（technology constant）
+  * td：峰值時間（time of delivery）
+* 優點：強調風險控制與長期維護；適合大型專案
+* 缺點：對專案規模與時程壓縮高度敏感
+
+## 6.7 COCOMO 基本模型（COCOMO Basic）
+
+* 三種模式：
+
+  * **Organic**（簡單專案）
+  * **Semidetached**（中等複雜度）
+  * **Embedded**（高複雜度嵌入式）
+* 公式：
+
+  $$\text{Effort} = a \cdot (\text{KLOC})^b$$
+
+  $$\text{Duration} = c \cdot (\text{Effort})^d$$
+
+  * a, b, c, d：回歸得出常數
+
+## 6.8 COCOMO 中介模型（COCOMO Intermediate）
+
+* 加入 15 項「成本驅動因子（Cost Drivers）」
+* 計算環境調整因子（EAF, Effort Adjustment Factor）
+* Effort = a·(KLOC)^b × EAF
+
+## 6.9 COCOMO 詳細模型（COCOMO Detailed）
+
+* 在元件層級套用中介模型，並分階段（Requirements, Design, Code & Test, Integration）調整因子
+* 更細緻地分配 Effort 與 Schedule
+
+## 6.10 COCOMO II
+
+* 三大子模型：
+
+  1. **Application Composition**（應用組成）—以物件點（Object Points）估算
+  2. **Early Design**（早期設計）—A·Size^B·M（7 項乘子）
+  3. **Post-Architecture**（後架構）—17 項乘子＋5 項尺度因子（Scale Factors）
+* **Reuse Model**：估算自動生成或重用程式碼整合 Effort
+
+## 6.11 校準與調整（Tailoring）
+
+* 可依組織歷史資料重新校準係數 a、b 或成本驅動因子
+* 建議至少 5–10 個專案以確保可靠性
+
+## 6.12 敏捷環境下的估算（Agile Estimation）
+
+* 強調持續校正（Continuous Refinement）
+* 早期使用類比法，後期以實際 Burn-down Data 做 Build-up
+* 目的：管理不確定性、漸進交付價值
+
