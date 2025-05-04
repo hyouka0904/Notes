@@ -1,12 +1,14 @@
-# 第二章 軟體流程（The Software Process）
+# 軟體工程管理筆記
 
-## 2.1 引言（Introduction）
+## 第二章 軟體流程（The Software Process）
+
+### 2.1 引言（Introduction）
 
 * **流程（process）**：專案執行的結構化活動序列，確保可重複、可傳承
 * 未文件化的流程易成為「口頭知識」，導致執行不一致、難以改進
 * 軟體流程是組織之智慧資產，需透過文件化與度量持續優化
 
-## 2.2 通用流程框架（Generic Process Framework）
+### 2.2 通用流程框架（Generic Process Framework）
 
 * **階段（Phase）**：流程的主要步驟，如需求、設計、實現、測試、維護
 * **活動（Activity）**：在每個階段中執行的具體工作，例如：
@@ -23,22 +25,30 @@
   3. **驗證（Validation）**：單元測試（Unit Test）、整合測試（Integration Test）、系統測試（System Test）、驗收測試（Acceptance Test）
   4. **演進／維護（Evolution / Maintenance）**：修正缺陷、功能增強、效能優化
 
-## 2.3 主要目標：高品質（High Quality）
+### 2.3 主要目標：高品質（High Quality）
 
 * **高品質 = 準時交付（Project Timeliness）**
 * **減少返工（Rework）** → 降低成本、提升客戶滿意度
 * **最佳實務**：早期缺陷偵測（Shift-left Testing）、持續整合（Continuous Integration）、自動化測試（Automated Testing）
 
-## 2.4 線性序列模型（Linear Sequential Model；瀑布模型 Waterfall Model）
+### 2.4 線性序列模型（Linear Sequential Model；瀑布模型 Waterfall Model）
 
 * **流程圖**：
   需求分析 → 系統設計 → 程式開發 → 單元測試 → 整合測試 → 系統測試 → 運維與維護
 * **適用情境**：需求明確、變更少、團隊經驗豐富
+  * 需求非常明確且穩定的專案（如軍事或航太系統）
+  * 技術風險低且團隊擁有豐富經驗的情況
+  * 契約型專案，需要明確的里程碑與交付物
+  * 法規嚴格的領域，需要全面的文件記錄
 * **優點**：易於管理與監控；里程碑（milestones）清晰
 * **缺點**：缺乏迭代，對中途變更反應遲緩；後期修正成本高
 * **補充交付物**：需求規格書、設計文件、測試報告、使用手冊
+* **歷史應用**：瀑布模型在2000年之前被大量用於軟體開發，即使在2001年敏捷宣言發布後，瀑布模型仍在許多組織中使用至上一個十年
+* **瀑布模型變種**：
+  * **Sashimi模型**：允許相鄰階段重疊，減少等待時間
+  * **增量式瀑布**：結合增量開發特性，每個增量內採用瀑布流程
 
-## 2.5 V 模型（V-Model）
+### 2.5 V 模型（V-Model）
 
 * **核心概念**：左右對應的「驗證（Verification）」與「驗收（Validation）」
 * **架構圖**：
@@ -46,7 +56,7 @@
 * **適用**：高可靠度（safety-critical）系統，如醫療、航空、嵌入式
 * **限制**：無動態迭代、風險管理不足
 
-## 2.6 螺旋模型（Spiral Model）
+### 2.6 螺旋模型（Spiral Model）
 
 * **特色**：結合 **風險管理（risk management）** 的迴圈式開發
 * **四象限流程**：
@@ -61,7 +71,7 @@
 * **優點**：持續風險評估，適合大型專案
 * **缺點**：流程複雜，對小型專案過度
 
-## 2.7 快速應用開發（RAD Model）
+### 2.7 快速應用開發（RAD Model）
 
 * **週期**：短迭代（60–90 天）
 * **四階段**：
@@ -71,15 +81,21 @@
   3. 快速建構（Rapid Construction / 多次迭代）
   4. 移轉（Cutover / 上線部署）
 * **特色**：高度使用者參與，工具支援原型快速成型
+* **優點**：
+  * 縮短產品交付時間、減少開發資源需求
+  * 可以快速預覽產品
+  * 有效利用現成工具和框架
+  * 持續整合有助於發現問題並獲取客戶反饋
+  * 持續客戶參與降低風險
 
-## 2.8 原型方法（Prototyping Paradigm）
+### 2.8 原型方法（Prototyping Paradigm）
 
 * **規格性原型（Specification Prototyping）**：快速拋棄式原型，用以驗證需求
 * **演化性原型（Evolutionary Prototyping）**：原型逐步演化為最終系統
 * **優點**：早期回饋、降低需求不確定性
 * **缺點**：若管理不當，易衍生設計混亂
 
-## 2.9 重用導向開發（Reuse-Oriented Development）
+### 2.9 重用導向開發（Reuse-Oriented Development）
 
 * **流程**：
 
@@ -90,7 +106,7 @@
 * **優點**：降低開發成本、縮短時程
 * **缺點**：元件相容性、授權風險
 
-## 2.10 漸增式開發（Incremental Development）
+### 2.10 漸增式開發（Incremental Development）
 
 * **概念**：將系統拆分為多個增量（increments），每次交付部分功能
 * **流程圖**：
@@ -98,8 +114,19 @@
 * **優點**：早期可運作、風險分散
 * **缺點**：需於初期定義整體架構
 
-## 2.11 敏捷方法（Agile Methods）
+### 2.11 敏捷方法（Agile Methods）
+#### 敏捷方法關鍵實踐
+  
+* **敏捷測試策略**：
+  * **持續測試**：開發過程中持續進行，而非僅在開發完成後
+  * **測試驅動開發（TDD）**：先寫測試再寫代碼
+  * **自動化測試**：單元、集成、系統層級的自動化測試
 
+* **敏捷實踐的效益量化**：
+  * 提高項目成功率30-35%
+  * 縮短交付時間20-50%
+  * 降低缺陷率60-90%
+  * 提高團隊生產力25-40%
 * **核心價值（Agile Manifesto）**：
 
   1. 個人與互動 > 流程與工具
@@ -108,29 +135,63 @@
   4. 回應變更 > 遵循計畫
 * **代表流程**：eXtreme Programming（XP）、Scrum、Kanban
 * **實踐**：每日站立會（Daily Stand-up）、衝刺規劃（Sprint Planning）、迭代回顧（Sprint Review）
+* **XP 實踐細節**：
+  * 結對編程（Pair Programming）：兩名程序員坐在一起開發代碼
+  * 測試先行（Test-First）：在編寫代碼前先編寫測試
+  * 持續整合（Continuous Integration）：每天多次構建
+  * 集體代碼所有權（Collective Code Ownership）：任何開發人員都可以修改任何部分的代碼
+  * 簡單設計（Simple Design）：保持設計簡單且必要
+  * 重構（Refactoring）：不斷改進現有代碼
 
-## 2.12 DevOps
+### 2.12 DevOps
 
 * **CI/CD 流水線**：持續開發 → 持續整合 → 持續測試 → 持續部署 → 持續監控
+  * **持續整合（CI）伺服器**：如Jenkins、GitLab CI、Circle CI
+  * **版本控制系統**：Git、SVN
+  * **自動化測試框架**：Selenium、Jest、JUnit
+  * **基礎設施即代碼（IaC）工具**：Terraform、Ansible、Chef
+  * **容器化技術**：Docker、Kubernetes
 * **CALMS 模型**：Culture（文化）、Automation（自動化）、Lean（精益）、Measurement（度量）、Sharing（分享）
+* **DevOps 量化效益調查**：
+  | 指標                        | 改善程度 |
+  | --------------------------- | -------- |
+  | 增加部門間協作              | 23%      |
+  | 提升部署應用程式品質        | 22%      |
+  | 增加使用軟體/服務的客戶數量 | 22%      |
+  | 實現原本不可能的新軟體/服務 | 21%      |
+  | 減少開發和部署所需員工數    | 21%      |
+  | 縮短軟體/服務上市時間       | 20%      |
+  | 增加收入                    | 19%      |
+  | 擴展軟體/服務至更多平台     | 19%      |
+  | 降低開發和運營支出          | 18%      |
+  | 增加軟體/服務部署頻率       | 17%      |
 
-## 2.13 成熟度與標準（Maturity & Standards）
+* **DevOps成熟度模型**：
+  * **初始級**：基本CI實踐，有限自動化
+  * **管理級**：標準化流程，全面CI實踐
+  * **定義級**：CD部署流程，多環境支持
+  * **量化級**：監控與度量系統，有數據驅動改進
+  * **優化級**：持續實驗與創新，自動故障修復
+
+### 2.13 成熟度與標準（Maturity & Standards）
 
 * **CMMI（Capability Maturity Model Integration）**：五級能力成熟度
 * **PSP（Personal Software Process）／TSP（Team Software Process）**：個人／團隊流程改進
 * **IEEE 1074**、**ISO/IEC 12207**：國際標準化流程
 
-## 2.14 選擇適合模型（Select an Appropriate SDLC Model）
+### 2.14 選擇適合模型（Select an Appropriate SDLC Model）
 
 * 考量因素：需求穩定度（Requirements volatility）、團隊經驗與規模（Team size & experience）、使用者參與度（Customer involvement）、專案風險（Risk profile）、時程與成本限制
 
-## 2.15 流程導入與評估（Process Implementation & Assessment）
+### 2.15 流程導入與評估（Process Implementation & Assessment）
 
 * **指定 vs 客製化**：流程標準化後，依組織需求作適度調整
 * **度量指標（Metrics）**：任務效能（Task effectiveness）、工時分布（Effort by activity）、缺陷密度（Defect density）
 * **持續改進**：透過回顧（retrospectives）與 PDCA（Plan-Do-Check-Act）循環
-# 第三章 Software Project Management
-## 3.1 軟體專案特性
+
+## 第三章 Software Project Management
+
+### 3.1 軟體專案特性
 
 * **規模（Size）**、交付期限（Delivery deadline）、預算與成本（Budget and costs）
 * **應用領域（Application domain）**、實作技術（Technology to be implemented）
@@ -139,7 +200,7 @@
 
 ---
 
-## 3.2 為何專案失敗？（Why Projects Fail?）
+### 3.2 為何專案失敗？（Why Projects Fail?）
 
 * 設定不切實際的期限（Unrealistic deadline）
 * 客戶需求頻繁變更（Changing customer requirements）
@@ -151,15 +212,15 @@
 
 ---
 
-## 3.3 專案管理定義（What is Project Management?）
+### 3.3 專案管理定義（What is Project Management?）
 
-* 將**知識（Knowledge）**、**技能（Skills）**、\*\*工具（Tools）**與**技術（Techniques）\*\*應用於專案活動
+* 將**知識（Knowledge）**、**技能（Skills）**、**工具（Tools）**與**技術（Techniques）**應用於專案活動
 * 目的：滿足或超越利害關係人（Stakeholders）的需求與期望
 * 利害關係人：因專案結果可能獲益或受損的任何人
 
 ---
 
-## 3.4 利害關係人（Stakeholders）
+### 3.4 利害關係人（Stakeholders）
 
 * **高階經理（Senior managers）**：定義業務目標
 * **專案經理（Project managers）**：計畫（Plan）、激勵（Motivate）、組織（Organize）、控制（Control）團隊
@@ -169,7 +230,7 @@
 
 ---
 
-## 3.5 管理關注點（Project Management Concerns）
+### 3.5 管理關注點（Project Management Concerns）
 
 * 人員配置（Staffing） → 成本估算（Cost estimation） → 排程（Scheduling）
 * 進度監控（Monitoring） → 資源管理（Resources） → 客戶溝通（Communication）
@@ -177,20 +238,20 @@
 
 ---
 
-## 3.6 專案經理的兩難（Project Manager’s Dilemma）
+### 3.6 專案經理的兩難（Project Manager's Dilemma）
 
 * 「快（Fast）」、「便宜（Cheap）」、「優質（Good）」三者只能任選兩項
 
 ---
 
-## 3.7 範疇確定（Scope Determination）
+### 3.7 範疇確定（Scope Determination）
 
 1. **範疇敘述（Narrative）**：界定問題邊界
 2. **功能分解（Decomposition）**：建立功能模組化結構
 
 ---
 
-## 3.8 管理活動（Management Activities）
+### 3.8 管理活動（Management Activities）
 
 * 提案撰寫（Proposal writing）
 * 專案計畫與排程（Planning & scheduling）
@@ -202,27 +263,27 @@
 
 ---
 
-## 3.9 專案人員配置（Project Staffing）
+### 3.9 專案人員配置（Project Staffing）
 
 * 理想人選受限於預算（Budget）、經驗（Experience）、組織需求（Skill development）
 * 必須在這些條件下妥善調度資源
 
 ---
 
-## 3.10 專案規劃（Project Planning）
+### 3.10 專案規劃（Project Planning）
 
 * 最耗時的管理活動，從起始到交付皆需持續更新
 * 支援計畫（Support plans）輔助主計畫（Schedule & budget plan）
 
 ---
 
-## 3.11 4P 模型（The 4 P’s）
+### 3.11 4P 模型（The 4 P's）
 
 * **人（People）**、**產品（Product）**、**流程（Process）**、**專案（Project）**
 
 ---
 
-## 3.12 團隊管理（Managing People）
+### 3.12 團隊管理（Managing People）
 
 * 管理個人與群組的互動
 * 溝通頻率（Communication channels）影響進度與品質
@@ -230,15 +291,15 @@
 
 ---
 
-## 3.13 溝通問題（Communication Problems）
+### 3.13 溝通問題（Communication Problems）
 
 * N 人的團隊有 N(N−1)/2 條溝通渠道
 * 人越多，溝通成本越高
-* 增加人手不一定能加快進度（Brooks’s Law）
+* 增加人手不一定能加快進度（Brooks's Law）
 
 ---
 
-## 3.14 軟體團隊組織（Software Teams）
+### 3.14 軟體團隊組織（Software Teams）
 
 * **MOI 模型**：動機（Motivation）、組織（Organization）、創新（Ideas）
 * **常見結構（Pressman）**：
@@ -250,7 +311,7 @@
 
 ---
 
-## 3.15 經典首席程式設計師團隊（CPT）
+### 3.15 經典首席程式設計師團隊（CPT）
 
 * 架構：首席程式設計師（Chief programmer）→ 備援（Back‐up）→ 秘書（Secretary）→ 程式員（Programmers）
 * 特點：功能分工、階層管理
@@ -258,7 +319,7 @@
 
 ---
 
-## 3.16 協調與溝通技術（Coordination & Communication）
+### 3.16 協調與溝通技術（Coordination & Communication）
 
 * 正式無人身：文件、里程碑、追蹤工具
 * 正式人身：審查會議、Walkthrough
@@ -268,7 +329,7 @@
 
 ---
 
-## 3.17 W5HH 原則（The W5HH Principle）
+### 3.17 W5HH 原則（The W5HH Principle）
 
 * **Why**：為何開發 → 商業價值
 * **What**：做什麼 → 任務集
@@ -280,7 +341,7 @@
 
 ---
 
-## 3.18 進度追蹤與排程（Tracking & Scheduling）
+### 3.18 進度追蹤與排程（Tracking & Scheduling）
 
 * 專案分解：階段 → 步驟 → 活動
 * 任務拆分後估算時間與資源
@@ -290,7 +351,7 @@
 
 ---
 
-## 3.19 動機管理（Motivation）
+### 3.19 動機管理（Motivation）
 
 * 滿足需求層次：生理（Basic needs）、安全、社交（Social）、尊重（Esteem）、自我實現
 * 人格類型：任務導向（Task‐oriented）、自我導向（Self‐oriented）、互動導向（Interaction‐oriented）
@@ -298,7 +359,7 @@
 
 ---
 
-## 3.20 群組運作與凝聚力（Group Working & Cohesiveness）
+### 3.20 群組運作與凝聚力（Group Working & Cohesiveness）
 
 * 群組互動影響績效
 * 組成需兼顧不同動機類型
@@ -307,7 +368,7 @@
 
 ---
 
-## 3.21 人員選拔與留任（Choosing & Keeping People）
+### 3.21 人員選拔與留任（Choosing & Keeping People）
 
 * 選拔：履歷（CV）、面試、推薦、測評
 * 留任：提供成長機會、管理認可、歸屬感
@@ -412,8 +473,18 @@
 * **黃金法則（Gamma rule）**：三點估算 t = (o + 4 m + p)/6
 * **第一階估算（First-Order Estimation）**：功能點數（FP）^ 指數（0.39–0.48）
 * **承諾式排程（Commitment-based）**：由開發者自行承諾日期
-* **雙倍法則（Glenn’s rule）**：自身估時 × 2，再加15–20％
+* **雙倍法則（Glenn's rule）**：自身估時 × 2，再加15–20％
 * **立方根法則**：排程 ≈ 3 × (man-months)^(1/3)
+
+### 專案估算方法比較
+
+| 估算方法 | 優點           | 缺點             | 適用情境             |
+| -------- | -------------- | ---------------- | -------------------- |
+| 專家判斷 | 快速、經驗導向 | 主觀性強         | 小型專案、時間緊迫   |
+| 類比估算 | 基於歷史數據   | 需要類似專案經驗 | 中型專案、有歷史數據 |
+| 參數模型 | 客觀、可重複   | 依賴參數精確性   | 大型專案、標準化環境 |
+| 三點估算 | 考慮不確定性   | 仍有主觀因素     | 風險較高的專案       |
+| 自下而上 | 詳細準確       | 耗時費力         | 關鍵業務系統         |
 
 ## 4.15 呈報估算（Presenting Estimates）
 
@@ -425,6 +496,20 @@
 ## 4.16 規劃與控制技術（Planning & Control Techniques）
 
 * **工作分解結構（WBS, Work Breakdown Structure）**：分層拆解至可估算粒度
+  * **WBS 創建原則**：
+  * **100%原則**：確保WBS包含所有必要工作，不多不少
+  * **可交付物導向**：以具體成果為中心，而非活動
+  * **互斥性**：每個工作項僅出現在一個分支中
+  * **適度分解**：通常2-4級最為合適
+  * **工作包大小**：最低層級工作包應在8-80小時範圍內
+
+* **WBS 字典要素**：
+  * 工作包識別碼與名稱
+  * 責任人與相關人員
+  * 詳細描述與驗收標準
+  * 前置任務與相依關係
+  * 估算的工時與資源需求
+  * 里程碑與交付日期
 * **甘特圖（Bar/Gantt chart）**：直觀顯示活動時程與責任人
 * **PERT 圖（Program Evaluation and Review Technique）**：計算最早/最晚時點、總浮時（Float）
 
@@ -435,7 +520,7 @@
 
 ## 4.18 排程考量（Scheduling Considerations）
 
-* 多人分工不一定等於工期除人數（Brooks’s Law）
+* 多人分工不一定等於工期除人數（Brooks's Law）
 * 資源可用率考量：長期預設每人每週僅有 4 天可用
 
 ## 4.19 專案里程碑（Project Milestones）
@@ -447,7 +532,19 @@
 
 * 由排程衍生：何時需何種人員、硬體、工具、外部服務
 * 可用於成本預算與採購流程安排
+* **資源過載處理策略**：
+  * **任務分割**：將大任務分割成可並行的小任務
+  * **資源平滑**：在允許的浮動時間內調整任務開始時間
+  * **優先級調整**：根據關鍵程度重新排列任務順序
+  * **資源替代**：尋找替代資源或外包部分工作
+  * **時間調整**：在必要時延長專案時程
 
+* **資源平衡工具功能**：
+  * 自動檢測資源衝突
+  * 提供平衡建議與方案比較
+  * 視覺化資源使用情況
+  * 模擬不同資源分配的影響
+  * 追蹤實際使用與計劃的差異
 
 # 第五章 軟體大小估算（Software Size Estimation）
 
@@ -482,6 +579,25 @@
 * 結構圖方塊數（PSPEC/CSPEC boxes）
 * 文件量（pages of documentation）
 * 物件圖中物件、屬性與服務數
+* * **COSMIC功能點**：
+  * 國際標準ISO/IEC 19761
+  * 基於數據移動（進入、退出、讀取、寫入）
+  * 不受技術實現影響
+  * 適用於實時與嵌入式系統
+
+* **Use Case點數（UCP）**：
+  * 基於用例複雜度與技術因素
+  * 計算公式：UCP = UUCP × TCF × EF
+    * UUCP：未調整用例點數
+    * TCF：技術複雜度因子
+    * EF：環境因子
+  * 常用於面向對象的軟體專案
+
+* **敏捷故事點（Story Points）**：
+  * 相對大小測量，通常使用斐波那契數列（1,2,3,5,8,13...）
+  * 考慮複雜性、工作量、風險和不確定性
+  * 與團隊速度（Velocity）配合使用預測工期
+  * 通過規劃撲克（Planning Poker）等技術估算
 
 ## 5.6 程式行數（LOC）
 
@@ -496,6 +612,16 @@
 * 計算方式：V(G)=e–n+2 （e＝邊數，n＝節點數）或「封閉區域＋1」
 * 指標：V(G)>10 需加強測試，V(G)>20 需警戒
 * 工具：Visual Studio、SonarQube、McCabe IQ …
+
+### 代碼複雜度度量工具比較
+
+| 工具名稱      | 支援語言                  | 主要功能               | 整合性        | 適用情境        |
+| ------------- | ------------------------- | ---------------------- | ------------- | --------------- |
+| SonarQube     | Java, C#, JS, Python等20+ | 代碼質量、安全、複雜度 | CI/CD, IDE    | 企業級持續集成  |
+| CodeClimate   | Ruby, JS, PHP, Python等   | 質量監控、趨勢分析     | GitHub        | 開源項目        |
+| Visual Studio | C#, C++, VB               | 內建複雜度分析         | .NET生態系統  | Windows開發環境 |
+| PMD           | Java, JavaScript, Apex等  | 靜態代碼分析           | Maven, Gradle | Java專案        |
+| Understand    | C, C++, Java, Ada等15+    | 深度依賴分析           | 獨立工具      | 安全關鍵系統    |
 
 ## 5.8 Halstead 度量（Halstead Metrics）
 
@@ -514,7 +640,7 @@
 ## 5.9 功能點（Function Points, FP）
 
 * 測量系統功能而非程式長度
-* 五類資訊元件：輸入（EI）、輸出（EO）、查詢（EQ）、內檔（ILF）、外介面（EIF）
+* 五類資訊元件：輸入（EI, External Input）、輸出（EO, External Output）、查詢（EQ, External Inquiry）、內檔（ILF, Internal Logical File）、外介面（EIF, External Interface File）
 * 計算流程：
 
   1. 計算**未調整功能點數（UFC）**：依複雜度權重加總
@@ -522,6 +648,20 @@
   3. FP = UFC × TCF
 * 優點：語言無關；貼近使用者價值
 * 缺點：主觀性高；需專業認證
+
+* **功能點計數標準化**：
+  * IFPUG 4.3標準 - 最廣泛使用
+  * NESMA標準 - 荷蘭標準，支持估算FP
+  * COSMIC標準 - 適用於實時系統
+  * MARK II標準 - 英國標準
+
+* **功能點分析常見挑戰與解決方案**：
+  * **挑戰**：識別邏輯文件時的主觀性
+    * **解決方案**：使用數據模型與業務流程文檔交叉驗證
+  * **挑戰**：現代GUI界面的計數困難
+    * **解決方案**：將相關功能分組，基於業務功能計數
+  * **挑戰**：敏捷環境中需求變更頻繁
+    * **解決方案**：採用增量式FP計數，定期重估新功能
 
 ## 5.10 其他大小度量（Other Measures）
 
@@ -534,7 +674,7 @@
 * 遵循組織標準；依熟悉度、可靠度、客戶需求而定
 * 較小專案可採專家判斷（Delphi）、大專案宜結合多種方法
 
-# 第六章 
+# 第六章 軟體成本分析與估算（Software Cost Analysis and Estimation）
 
 ## 6.1 成本分析（Cost Analysis）
 
@@ -578,20 +718,19 @@
 
 * **Bottom-Up（自下而上）**：從最低層元件估算後加總；精準但易漏算整合/文件成本
 * **Top-Down（自上而下）**：依整體功能分配成本；納入系統級活動但可能低估低階技術難題
-* **Parkinson’s Law**：工作量會填滿可用時間 → Effort = 人數 × 時間
+* **Parkinson's Law**：工作量會填滿可用時間 → Effort = 人數 × 時間
 * **專家判斷（Expert Judgment）**：多位領域專家迭代共識（如 Delphi）；成本低廉但需經驗豐富
 * **類比法（Analogy）**：以過去類似專案平均成本推估；精準度取決於相似度與資料庫維護情況
 * **Make/Buy 決策（Make/Buy Decision）**：自建 vs 採購 vs 修改 COTS；可結合決策樹分析
 * **參數化/演算法式（Parametric / Algorithmic）**：如 COCOMO、SLIM，以統計回歸模型自動計算
 
-## 6.6 SLIM（Putnam’s Software Life-cycle Model）
+## 6.6 SLIM（Putnam's Software Life-cycle Model）
 
 * 概念：依 Rayleigh 分布模擬人力投入曲線
 * 公式：
   
-  $$m(t) = 2 \cdot a \cdot K \cdot t \cdot e^{-a \cdot t^2}$$
+  $m(t) = 2 \cdot a \cdot K \cdot t \cdot e^{-a \cdot t^2}$
   
-
   * K：總人力（staff-years）
   * a：技術常數（technology constant）
   * td：峰值時間（time of delivery）
@@ -607,9 +746,9 @@
   * **Embedded**（高複雜度嵌入式）
 * 公式：
 
-  $$\text{Effort} = a \cdot (\text{KLOC})^b$$
+  $\text{Effort} = a \cdot (\text{KLOC})^b$
 
-  $$\text{Duration} = c \cdot (\text{Effort})^d$$
+  $\text{Duration} = c \cdot (\text{Effort})^d$
 
   * a, b, c, d：回歸得出常數
 
@@ -643,4 +782,3 @@
 * 強調持續校正（Continuous Refinement）
 * 早期使用類比法，後期以實際 Burn-down Data 做 Build-up
 * 目的：管理不確定性、漸進交付價值
-
