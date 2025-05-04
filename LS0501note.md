@@ -21,11 +21,11 @@
 ## 心動週期（Cardiac cycle）
 1. **收縮期（Systole）**：心肌收縮，心室將血液壓出。  
 2. **舒張期（Diastole）**：心肌放鬆，心房與心室充盈。  
-3. **心輸出量（Cardiac output）**＝心率（72 次／分）×每搏輸出量（70 mL／搏）≈5 L／分。
+3. **心輸出量（Cardiac output）** ＝心率（72 次／分）×每搏輸出量（70 mL／搏）≈5 L／分。
 
 ## 心律控制（The control of heart rhythm）
 - **竇房結（SA node）**：設定收縮速率與節律。  
-- **房室結（AV node）**→浦金氏纖維（Purkinje fibers）→心室收縮。  
+- **房室結（AV node）** →浦金氏纖維（Purkinje fibers）→心室收縮。  
 - 調節因素包括交感／副交感神經、腎上腺素（epinephrine）、體溫與運動。
 
 ## 心電圖（Electrocardiogram tracings）
@@ -81,7 +81,7 @@
 # Animal Defenses Against Infection
 
 ## 人體淋巴系統（The human lymphatic system）
-- **淋巴管（Lymphatic vessels）**及**淋巴結（lymph nodes）**返回組織液至血液。  
+- **淋巴管（Lymphatic vessels）** 及 **淋巴結（lymph nodes）** 返回組織液至血液。  
 - **淋巴器官**：骨髓（bone marrow）、胸腺（thymus）、脾臟（spleen）、扁桃體（tonsils）。
 
 ## 免疫反應概述（Overview of the immune response）
@@ -92,14 +92,14 @@
 - **自然殺手細胞（NK cells）**。
 
 ## 噬菌作用（Phagocytosis）
-- **昆蟲血細胞（Hemocytes）**進行吞噬，並分泌抗微生物肽破壞病原。
+- **昆蟲血細胞（Hemocytes）** 進行吞噬，並分泌抗微生物肽破壞病原。
 
 ## Toll 受體訊號（Toll-like receptor (TLR) signaling）
 - **TLR** 識別特定病原片段，觸發吞噬與內部防禦反應。  
 - 哺乳動物的吞噬細胞（中性粒／巨噬細胞）表面含 TLR。
 
 ## 發炎反應（Inflammatory response）
-- **肥大細胞（Mast cells）**釋放組織胺（histamine）→血管擴張。  
+- **肥大細胞（Mast cells）** 釋放組織胺（histamine）→血管擴張。  
 - **巨噬細胞**釋放信號促進血流→紅腫熱痛。  
 - **膿液（Pus）**：含白血球、死菌及組織碎片。
 
