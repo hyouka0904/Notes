@@ -1193,3 +1193,1880 @@ VanillaCore 架構分為多個層級：
   * `executeCreateView` - 創建新視圖
   * `executeCreateIndex` - 創建新索引
   * 這些方法主要調用目錄管理器來執行相應操作
+
+# 資料存取與檔案管理 (Data Access and File Management)
+
+## 儲存引擎與資料存取 (Storage Engine and Data Access)
+
+### 儲存引擎的主要功能 (Main Functions of Storage Engine)
+- **資料存取 (Data Access)**
+  - 檔案存取 (File access)：TableInfo、RecordFile
+  - 元數據存取 (Metadata access)：CatalogMgr
+  - 索引存取 (Index access)：IndexInfo、Index
+- **交易管理 (Transaction Management)**
+  - 一致性和隔離性 (Consistency and Isolation)：ConcurrencyMgr
+  - 原子性和持久性 (Atomicity and Durability)：RecoveryMgr
+
+### 資料存取層 (Data Access Layers) - 由下而上
+- **儲存.檔案 (storage.file)**: Page 和 FileMgr
+  - 盡可能快速地存取磁碟 (Access disks as fast as possible)
+- **儲存.緩衝 (storage.buffer)**: Buffer 和 BufferMgr
+  - 緩存頁面 (Cache pages)
+  - 與復原管理員協同確保原子性和持久性 (Work with recovery manager for A and D)
+- **儲存.記錄 (storage.record)**: RecordPage 和 RecordFile
+  - 在頁面中排列記錄 (Arrange records in pages)
+  - 釘住/釋放緩衝區 (Pin/unpin buffers)
+  - 與復原管理員協同確保原子性和持久性 (Work with recovery manager for A and D)
+  - 與並行管理員協同確保一致性和隔離性 (Work with concurrency manager for C and I)
+- **索引 (Index)**
+- **目錄管理員 (CatalogMgr)**
+
+### 記錄檔案如何映射到實際磁碟檔案 (How RecordFile Maps to Actual Files)
+- RecordFile 透過多層映射到實際磁碟上的檔案
+- 從 RecordFile → RecordPage → Buffer → Page → 實際檔案塊 (blocks)
+- FileMgr 管理實際的磁碟 I/O 操作
+- BufferMgr 處理記憶體中的緩存管理
+
+## 磁碟存取 (Disk Access)
+
+### 為什麼需要磁碟? (Why Disks?)
+- 資料庫內容必須保存在**持久性儲存裝置 (persistent storages)** 中
+  - 確保系統當機時資料不會遺失，確保持久性 (D 特性)
+- 記憶體層次結構：CPU → 快取 → 主記憶體 → 大量儲存裝置 (磁碟、磁帶等)
+
+### 速度與成本 (Speed and Cost)
+- **主存儲 (Primary storage)** 快但容量小
+- **次級儲存 (Secondary storage)** 容量大但速度慢
+- 記憶體層次：
+  - 頻寬和成本隨著向上層移動而增加
+  - 延遲和容量隨著向下層移動而增加
+
+### 速度差異有多大? (How Slow?)
+- 存取一個區塊的典型時間：
+  - RAM: ~60ns
+  - HDD: ~6ms (比 RAM 慢 10萬倍)
+  - SSD: ~0.06ms (比 RAM 慢 1000倍)
+
+### 磁碟和檔案管理 (Disk and File Management)
+- I/O 操作包括：
+  - **讀取 (Read)**: 從磁碟傳輸資料到主記憶體(RAM)
+  - **寫入 (Write)**: 從 RAM 傳輸資料到磁碟
+
+### 了解磁性硬碟 (Understanding Magnetic Disks)
+- 資料以**磁區 (sectors)** 為單位儲存在磁碟上
+- **順序存取 (Sequential access)** 比隨機存取快
+  - 磁碟臂移動較慢
+- 存取時間 = 尋道時間 (seek time) + 旋轉延遲 (rotational delay) + 傳輸時間 (transfer time)
+
+### 存取延遲 (Access Delay)
+- 尋道時間: 1~20ms
+- 旋轉延遲: 0~10ms
+- 傳輸率約為每 4KB 頁面 1ms
+- 尋道時間和旋轉延遲是主要延遲來源
+
+### SSD 特性 (How about SSDs?)
+- 隨機存取延遲通常低於 0.1ms
+- 順序存取仍可能比隨機存取更快
+  - SSD 總是讀/寫整個區塊，即使只需要一小部分
+- 如果讀/寫大小與區塊大小相當，性能差異不大
+
+### 作業系統的磁碟存取 API (OS's Disk Access APIs)
+- 作業系統提供兩種磁碟存取 API:
+  - **區塊級介面 (Block-level interface)**
+  - **檔案級介面 (File-level interface)**
+
+## 區塊級介面 (Block-Level Interface)
+
+### 區塊層級抽象 (Block-Level Abstraction)
+- 磁碟可能具有不同的硬體特性，特別是不同的磁區大小
+- 作業系統使用**區塊 (blocks)** 隱藏磁區
+  - 區塊是 OS 之上的 I/O 單位
+  - 大小由 OS 決定
+
+### 轉換 (Translation)
+- OS 維護區塊和磁區之間的映射
+- 單層轉換：OS 將區塊號碼(從 0 開始)轉換為實際磁區地址
+
+### 區塊級介面特性 (Block-Level Interface)
+- 無法直接從磁碟存取區塊內容
+  - 區塊可能映射到多個磁區
+- 必須先將組成區塊的磁區讀入記憶體頁面，然後從中存取
+- **頁面 (Page)**: 記憶體中與區塊大小相同的區域
+
+### API
+- `readblock(n, p)`: 讀取區塊 n 的內容到記憶體頁面 p
+- `writeblock(n, p)`: 將頁面 p 的內容寫入磁碟區塊 n
+- `allocate(k, n)`: 找到 k 個連續未使用的磁碟區塊並標記為已使用
+- `deallocate(k, n)`: 將從區塊 n 開始的 k 個連續區塊標記為未使用
+
+## 檔案級介面 (File-Level Interface)
+
+### 檔案級抽象 (File-Level Abstraction)
+- OS 提供更高級的磁碟介面，稱為**檔案系統 (file system)**
+- 檔案是位元組序列
+- 客戶端可從檔案任意位置讀取/寫入任意數量的位元組
+- 此級別沒有區塊的概念
+
+### 檔案級介面示例 (File-Level Interface Example)
+- Java 中的 `RandomAccessFile` 類
+- 在偏移量 700 處增加儲存在檔案 "file1" 中的 4 個位元組：
+  ```java
+  RandomAccessFile f = new RandomAccessFile("file1", "rws");
+  f.seek(700);
+  int n = f.readInt(); // 讀取後指針移至704
+  f.seek(700);
+  f.writeInt(n + 1);
+  f.close();
+  ```
+
+### 區塊存取? (Block Access?)
+- 是的！
+  - "s" 模式有什麼含義？(同步寫入磁碟)
+- OS 隱藏用於檔案 I/O 的頁面 (I/O 緩衝區)
+- OS 也隱藏檔案的區塊
+
+### 檔案的隱藏區塊 (Hidden Blocks of a File)
+- OS 將檔案視為**邏輯區塊 (logical blocks)** 序列
+  - 例如，如果區塊為 4096 位元組
+  - 第 700 位元組位於邏輯區塊 0
+  - 第 7992 位元組位於邏輯區塊 1
+- 邏輯區塊 ≠ 實體區塊 (格式化磁碟)
+
+### 檔案配置方式 (File Allocation Methods)
+
+#### 連續配置 (Continuous Allocation)
+- 在連續實體區塊中儲存每個檔案
+- 缺點：
+  - 內部碎片 (Internal fragmentation)
+  - 外部碎片 (External fragmentation)
+
+#### 範圍配置 (Extent-Based Allocation)
+- 將檔案儲存為固定長度的**範圍 (extents)** 序列
+- 範圍是實體區塊的連續塊
+- 只能緩解外部碎片問題，但未完全解決
+
+#### 索引配置 (Indexed Allocation)
+- 為每個檔案保留特殊的**索引區塊 (index block)**
+- 記錄分配給檔案的實體區塊
+
+### 轉換 (Translation)
+- OS 維護邏輯區塊和實體區塊之間的映射
+  - 特定於檔案系統實現
+- 調用 `seek` 時的層次轉換：
+  - 層 1: 位元組位置 → 邏輯區塊
+  - 層 2: 邏輯區塊 → 實體區塊
+  - 層 3: 實體區塊 → 磁區
+
+## VanillaCore中的檔案管理 (File Management in VanillaCore)
+
+### VanillaCore的選擇 (VanillaCore's Choice)
+- 折衷策略：檔案級，但直接存取邏輯區塊
+- 優點：
+  - 簡單
+  - 可管理區塊內的局部性
+  - 可管理刷新時間 (為確保正確性)
+- 缺點：
+  - 需要始終假設隨機磁碟存取
+  - 甚至在順序掃描時也是如此
+- 快速 → 最小化 I/O 次數
+- 許多 DBMS 也採用此方法（如 Microsoft Access, Oracle 等）
+
+### 檔案 (Files)
+- VanillaCore 資料庫儲存在資料庫目錄下的多個檔案中
+  - 每個表和索引一個檔案
+    - 包括目錄檔案 (如 xxx.tbl, tblcat.tbl)
+  - 日誌檔案 (如 vanilladb.log)
+
+### 區塊ID (BlockId)
+- 不可變 (Immutable)
+- 標識特定邏輯區塊
+  - 檔案名 + 邏輯區塊號
+- 例如：`BlockId blk = new BlockId("std.tbl", 23);`
+
+### 頁面 (Page)
+- 保存區塊的內容
+  - 由 OS 中的 I/O 緩衝區支持
+- 未綁定到特定區塊
+- 一次讀取/寫入/附加整個區塊
+- 設置的值在 `write()` 前不會刷新到磁碟
+
+### 檔案管理員 (FileMgr)
+- 單例，由所有 Page 實例共享
+- 處理實際的 I/O
+- 保持資料庫所有已打開的檔案
+  - 每個檔案只打開一次，由所有工作線程共享
+
+### 使用 VanillaCore 檔案管理員示例
+```java
+VanillaDb.initFileMgr("studentdb");
+FileMgr fm = VanillaDb.fileMgr();
+
+BlockId blk1 = new BlockId("student.tbl", 0);
+Page p1 = new Page();
+p1.read(blk1);
+Constant sid = p1.getVal(34, Type.INTEGER);
+Type snameType = Type.VARCHAR(20);
+Constant sname = p1.getVal(38, snameType);
+System.out.println("student " + sid + " is " + sname);
+
+Page p2 = new Page();
+p2.setVal(34, new IntegerConstant(25));
+Constant newName = new VarcharConstant("Rob").castTo(snameType);
+p2.setVal(38, newName);
+BlockId blk2 = p2.append("student.tbl");
+```
+
+### I/O 介面 (I/O Interfaces)
+- 在 VanillaCore 和 JVM/OS 之間
+- 兩種選擇 (都在檔案級)：
+  - **Java 新 I/O (Java New I/O)**
+  - **Jaydio (O_Direct, 僅 Linux)**
+- 通過更改 vanilladb.properties 檔案中 USING_O_Direct 屬性值來切換實現
+
+#### Java 新 I/O (Java New I/O)
+- 每個頁面包裝一個 ByteBuffer 實例來存儲位元組
+- ByteBuffer 有兩個工廠方法：allocate 和 allocateDirect
+  - allocateDirect 告訴 JVM 使用 OS 的 I/O 緩衝區來保存位元組
+  - 不在 Java 可編程緩衝區中，沒有垃圾回收
+  - 消除了雙重緩衝的冗餘
+
+#### Jaydio
+- 提供類似於 Java 新 I/O 的介面
+- 具有 O_Direct 功能
+  - 某些檔案系統(在 Linux 上)將檔案頁面緩存在其緩衝區中以提高性能
+  - O_Direct 告訴這些檔案系統不要緩存檔案頁面，因為我們將實現自己的緩存策略
+  - 僅在 Linux 上可用
+
+# 記憶體管理 (Memory Management)
+
+## 概述 (Overview)
+
+* 資料庫系統需要有效的記憶體管理策略，以最小化慢速I/O操作的影響
+* 記憶體管理的兩個主要部分：
+  * 緩衝使用者資料 (Buffering User Data) → 使用緩衝區管理器 (Buffer Manager)
+  * 快取日誌記錄 (Caching Logs) → 使用日誌管理器 (Log Manager)
+
+## 緩衝使用者資料 (Buffering User Data)
+
+### 慢速I/O的影響 (Consequences of Slow I/Os)
+
+* 資料庫系統需要架構來最小化I/O操作：
+  * 以區塊為單位存取磁碟 (Block access)
+  * 自行管理區塊的快取 (Self-managed caching)
+  * 選擇耗費最少區塊I/O的計畫
+
+### 儲存存取模式 (Storage Access Patterns)
+
+* 空間局部性 (Spatial locality)：每個客戶端一次專注於少量區塊
+  * 例如：產品掃描 (product scan) 一次只需要兩個區塊（左右兩個表）
+* 時間局部性 (Temporal locality)：最近使用的區塊很可能在近期再次被使用
+  * 例如：目錄 (catalog) 的區塊
+
+### 透過快取最小化磁碟存取 (Minimizing Disk Access by Caching)
+
+* 核心概念：保留一組頁面 (pages) 池，保存最近使用區塊的內容
+  * 只有當池中沒有空頁面時才進行區塊的換入/換出
+* 好處：
+  * 經濟：只需少量記憶體空間
+  * 節省讀取：如果請求的區塊已在頁面中
+  * 節省寫入：對一個區塊的所有修改只需在換出時寫入一次
+
+### 為何不使用虛擬記憶體 (Why not virtual memory)
+
+* 虛擬記憶體 (Virtual Memory) 問題：
+  * 問題1：頁面替換演算法不佳（如FIFO, LRU等）
+    * 作業系統不知道哪些區塊將在近期被使用
+  * 問題2：無法控制的延遲寫入 (delayed writes)
+    * 自動換頁導致系統斷電時髒頁面可能丟失，破壞資料庫的恢復能力和交易的持久性
+* 資料庫自行管理頁面的優點：
+  * 更好的替換策略，控制換頁，減少I/O
+  * 支援元寫入 (meta-writes)，可以寫入日誌以從當機恢復
+
+### 緩衝哪些區塊？(What Blocks to Cache)
+
+* 使用者資料區塊 (數據庫包含目錄) → 由緩衝區管理器 (Buffer Manager) 管理
+* 日誌區塊 → 由日誌管理器 (Log Manager) 管理
+
+### 使用者區塊的存取模式 (Access Pattern to User Blocks)
+
+* 隨機區塊讀取和寫入
+* 多個執行緒對多個區塊的並行存取
+* 可預測的特定區塊存取
+  * 每個掃描一次需要特定的區塊
+  * 表格掃描每次需要一個區塊，並可以忘記剛讀過的內容
+
+### 緩衝區管理器 (Buffer Manager)
+
+* 為減少I/O，緩衝區管理器分配一組頁面，稱為緩衝池 (buffer pool)
+* 頁面應該是由作業系統持有的直接I/O緩衝區
+  * 避免虛擬記憶體的換頁
+  * 消除雙重緩衝的冗餘
+  * 例如：Java中的`ByteBuffer.allocateDirect()`
+
+### 固定區塊 (Pinning Blocks)
+
+* 每個表格掃描一次需要一個區塊
+  * 區塊的語意隱藏在關聯的`RecordFile`後面
+* `RecordFile`實例告訴記憶體管理器需要哪些區塊
+  * 每個執行緒/客戶端一個實例
+* 固定區塊的過程：
+  1. `RecordFile`要求緩衝區管理器在某個頁面中固定(pin)一個區塊
+  2. 客戶端存取頁面內容
+  3. 客戶端完成後，告訴緩衝區管理器取消固定(unpin)該區塊
+* 換出時，只有包含未固定區塊的頁面可以被換出
+
+### 固定頁面 (Pinning Pages)
+
+* 固定的結果：
+  1. 命中 (hit)：不需I/O
+  2. 換頁 (swapping)：緩衝池中至少有一個候選頁面持有未固定區塊
+     * 如果頁面是髒的 (dirty)，需要將頁面內容寫回磁碟
+     * 需根據替換策略選擇候選頁面
+     * 然後讀入所需的區塊
+  3. 等待 (waiting)：緩衝池中所有頁面都被固定
+     * 等待直到其他人取消固定一個頁面
+
+### 緩衝區 (Buffers)
+
+* 緩衝池中的每個頁面需要關聯額外信息：
+  * 包含的區塊是否被固定？
+  * 包含的區塊是否被修改 (dirty)？
+  * 替換策略所需的資訊
+* 緩衝區 (buffer) 包裝頁面並持有這些資訊
+* 一個區塊可被多個客戶端固定和存取
+  * 緩衝區必須是執行緒安全的
+  * 資料庫需要其他機制 (並行控制) 來序列化對緩衝區的衝突操作
+
+### 緩衝區替換策略 (Buffer Replacement Strategies)
+
+* 緩衝池中的所有緩衝區一開始都未分配
+* 一旦所有緩衝區都被載入，緩衝區管理器必須替換某個候選緩衝區中未固定的區塊
+* 最佳候選者？
+  * 包含在最長時間內不會被使用的區塊的緩衝區
+  * 最大化固定的命中率
+
+#### 緩衝區替換策略的類型
+
+* 由於無法確定未固定緩衝區中區塊的存取模式，需要啟發式方法：
+  * 天真 (Naïve) 策略
+  * FIFO (First In First Out) 策略
+  * LRU (Least Recently Used) 策略
+  * 時鐘 (Clock) 策略
+* 一些商業系統為不同緩衝類型使用不同啟發式方法
+  * 如目錄緩衝區、索引緩衝區、全表掃描的緩衝區等
+
+#### 天真策略 (Naïve Strategy)
+
+* 從頭開始順序遍歷緩衝池，替換第一個遇到的未固定緩衝區
+* 容易實現，但有問題：緩衝區使用不均勻，某些緩衝區可能包含過時資料，導致命中率低
+
+#### FIFO策略 (FIFO Strategy)
+
+* 選擇包含最早讀入區塊的緩衝區
+  * 每個緩衝區記錄區塊讀入時間
+* 未固定緩衝區可以維護在優先佇列中
+  * 在O(1)時間內找到目標未固定緩衝區
+* 假設：較舊的區塊在未來不太可能被使用
+  * 不一定有效，如目錄區塊經常使用
+
+#### LRU策略 (LRU Strategy)
+
+* 選擇包含最近最少使用區塊的緩衝區
+  * 每個緩衝區記錄區塊取消固定的時間
+* 假設：近期未使用的區塊在近期不太可能被使用
+  * 一般有效
+  * 避免替換常用頁面
+* 但對全表掃描仍不是最佳
+* 大多數商業系統使用LRU的簡單增強版本
+
+##### LRU變體
+
+* 在Oracle DBMS中，LRU佇列有兩個邏輯區域：
+  * 冷 (Cold) 區域在熱 (Hot) 區域之前
+  * 冷：使用LRU；熱：使用FIFO
+  * 對於全表掃描：將剛讀取的頁面放入頭部 (LRU端)
+
+#### 時鐘策略 (Clock Strategy)
+
+* 類似天真策略，但總是從上次替換位置開始遍歷
+* 盡可能均勻地使用未固定緩衝區，帶有LRU風格
+* 容易實現
+
+### 緩衝池大小 (Pool Size)
+
+* 所有當前被客戶端存取的區塊集合稱為工作集 (working set)
+* 理想情況下，緩衝池應該大於工作集
+  * 否則，可能發生死鎖 (deadlock)
+
+### 死鎖 (Deadlock)
+
+* 當固定時沒有候選緩衝區怎麼辦？
+  * 緩衝區管理器讓客戶端等待
+  * 當其他人取消固定一個區塊時通知客戶端再次固定
+* 死鎖情況：
+  * 客戶端A和B都想使用兩個緩衝區，但只剩兩個候選緩衝區
+  * 如果他們都獲得了一個緩衝區並嘗試獲取另一個，就會發生死鎖
+* 如何檢測死鎖？
+  * 沒有緩衝區在異常長時間內變得可用
+* 如何處理死鎖？
+  * 強制至少一個客戶端先取消固定它持有的所有區塊，然後一個一個重新固定
+
+### 自死鎖 (Self-Deadlock)
+
+* 客戶端固定的區塊多於緩衝池容量
+* 發生情況：
+  * 緩衝池太小
+  * 客戶端惡意（幸運的是，我們自己編寫客戶端/RecordFile）
+* 如何處理？
+  * 固定大小的緩衝區管理器別無選擇，只能拋出異常
+* 緩衝池應足夠大，至少能容納單個客戶端的工作集
+* 好的客戶端應節約固定區塊：
+  * 完成時立即取消固定區塊
+  * 在JDBC中迭代ResultSet後調用close()
+
+## 快取日誌 (Caching Logs)
+
+### 為何需要日誌？(Why logging?)
+
+* 為確保交易的ACID屬性：
+  * 原子性 (Atomicity)：交易中的所有操作要麼全部成功(交易提交)，要麼全部失敗(交易回滾)
+  * 一致性 (Consistency)：交易前後，數據不會違反任何設定的規則
+  * 隔離性 (Isolation)：多個交易可以並行執行，但不會互相干擾
+  * 持久性 (Durability)：一旦交易提交，它所做的任何更改永久保存在數據庫中
+
+### 天真的C和I實現 (Naïve C and I)
+
+* 觀察：沒有跨數據庫存取數據的交易
+* 為確保C和I，每個交易可以簡單地鎖定整個數據庫
+  * 在開始時獲取鎖
+  * 在提交或回滾時釋放鎖
+* 數據庫內沒有並行交易
+  * CPU和I/O之間沒有流水線處理
+
+### 天真的A和D實現 (Naïve A and D)
+
+* D在有緩衝區的情況下？
+* 在提交交易前刷新交易的所有髒緩衝區
+  * 交易提交後返回DBMS客戶端
+* 系統崩潰然後恢復怎麼辦？
+  * 為確保A，DBMS需要在啟動時回滾未提交的交易
+* 問題：
+  * 如何確定哪些交易要回滾？
+  * 如何回滾交易所做的所有動作？
+
+### 預寫日誌 (Write-Ahead-Logging, WAL)
+
+* 記錄每個交易修改的日誌
+  * 例如：<SETVAL, <TX>, <BLK>, <OFFSET>, <VAL_TYPE>, <OLD_VAL>>
+  * 在記憶體中以節省I/O
+* 提交交易：
+  1. 在刷新緩衝區前將所有相關日誌寫入日誌文件
+  2. 刷新後，將<COMMIT, <TX>>日誌寫入日誌文件
+* 交換髒緩衝區：
+  * 在刷新用戶區塊前必須刷新所有日誌
+* 確定回滾交易：沒有COMMIT日誌的交易
+* 如何回滾：撤銷已記錄到磁盤的操作，刷新所有受影響的區塊，然後寫入<ROLLBACK, <TX>>日誌
+
+### WAL的假設
+
+* 每個區塊寫入要麼完全成功，要麼完全失敗，即使電源故障
+  * 即崩潰後沒有損壞的日誌區塊
+  * 現代磁盤通常在斷電時儲存足夠的電力完成正在進行的扇區寫入
+  * 如果區塊大小等於扇區大小或使用日誌文件系統（如EXT3/4, NTFS）則有效
+
+### 快取日誌 (Caching Logs)
+
+* 像用戶區塊一樣，日誌文件的區塊也被快取
+  * 每個交易操作被記錄到記憶體中
+  * 日誌區塊只在以下情況刷新：
+    * 交易提交
+    * 緩衝區交換
+  * 避免過多的I/O
+
+### 日誌區塊是否需要緩衝池？
+
+#### 存取模式比較
+
+* 用戶區塊：
+  * 多個文件
+  * 隨機讀取、寫入和追加
+  * 多個工作執行緒（每個JDBC客戶端一個執行緒）的並行存取
+* 日誌區塊：
+  * 單一日誌文件
+  * 始終由多個工作執行緒追加
+  * 始終由單個恢復執行緒在啟動時順序向後讀取
+
+#### 一個緩衝區足夠 (One Buffer Is Enough)
+
+* 對於（順序前向）追加：
+  * 所有工作執行緒"固定"同一文件的尾部區塊
+  * 只需一個緩衝區
+* 對於順序向後讀取：
+  * 恢復執行緒"固定"正在讀取的區塊
+  * 只有一個恢復執行緒
+  * 只需一個緩衝區
+* DBMS需要額外的日誌管理器來實現這種專門的日誌區塊記憶體管理策略
+
+### 日誌序列號 (Log Sequence Number, LSN)
+
+* 每個日誌記錄有一個唯一標識符，稱為日誌序列號
+  * 通常是區塊ID + 起始位置
+* `flush(lsn)`刷新所有LSN不大於lsn的日誌記錄
+
+### 讀取的快取管理 (Cache Management for Read)
+
+* 提供向後迭代日誌記錄的日誌迭代器
+* 內部上，迭代器分配一個頁面，始終保存當前日誌記錄所在的區塊
+* 最佳：更多頁面不會幫助節省I/O
+
+### 追加的快取管理 (Cache Management for Append)
+
+* 永久分配一個頁面P來保存日誌文件的尾部區塊
+* 當調用`append(rec)`時：
+  1. 如果P中沒有空間，則將頁面P寫回磁盤並清除其內容
+  2. 將新日誌記錄添加到P
+* 當調用`flush(lsn)`時：
+  1. 如果該日誌記錄在P中，則將P寫入磁盤
+  2. 否則，不做任何事情
+* 最佳：更多頁面不會幫助節省I/O
+
+## LogMgr in VanillaCore
+
+* 在`storage.log`包中
+* 單例模式
+* 在系統啟動期間通過`VanillaDb.initFileAndLogMgr(dbname)`構建
+* 通過`VanillaDb.logMgr()`獲取
+* `append`方法將日誌記錄追加到日誌文件，並返回記錄的LSN
+  * 不保證記錄將寫入磁盤
+* 客戶端可以通過調用`flush`強制特定日誌記錄及其所有前任寫入磁盤
+* VanillaCore簡化了LSN為區塊號
+  * 一個區塊中的所有日誌記錄被分配相同的LSN，因此一起刷新
+
+### BasicLogRecord
+
+* 日誌記錄中值的迭代器
+* 日誌管理器只實現記憶體管理策略
+  * 不理解日誌記錄的內容
+  * 是恢復管理器定義日誌記錄的語義
+
+### LogIterator
+
+* 客戶端可以通過調用LogMgr中的`iterator`方法讀取日誌文件中的記錄
+  * 返回一個LogIterator實例
+* 調用`next`返回從尾部逆序的下一個BasicLogRecord
+* 這是恢復管理器希望看到日誌的方式
+
+## BufferMgr in VanillaCore
+
+* 每個交易都有自己的BufferMgr
+* 在創建交易時通過`transactionMgr.newTransaction(...)`構建
+* 通過`transaction.bufferMgr()`獲取
+* 交易的BufferMgr負責跟踪哪些緩衝區被交易固定，在沒有可用緩衝區時讓交易等待
+* `flush()`刷新被指定交易修改的每個緩衝區
+* `available()`返回持有未固定緩衝區的緩衝區數量
+
+### BufferPoolMgr
+
+* BufferPoolMgr是一個單例對象，對外部世界隱藏在buffer包中
+* 它為所有頁面管理緩衝池，並實現時鐘緩衝區替換策略
+  * 磁盤存取的細節對客戶端未知
+
+### Buffer
+
+* 包裝頁面並存儲：
+  * 持有區塊的ID
+  * 固定計數
+  * 修改信息
+  * 日誌信息
+* 支持WAL：
+  * `setVal()`需要一個LSN
+    * 必須在`LogMgr.append()`之後
+  * `flush()`調用`LogMgr.flush(maxLsn)`
+    * 由BufferMgr在交換時調用
+
+### PageFormatter
+
+* BufferMgr的`pinNew(fmtr)`方法向文件追加新區塊
+* PageFormatter初始化區塊
+  * 在定義記錄語義的包中擴展（如`storage.record`和`storage.index.btree`）I'll create a comprehensive Markdown note from the slide content, following your requirements. Here's the formatted note:
+
+# 記憶體管理 (Memory Management)
+
+## 概述 (Overview)
+
+* 資料庫系統需要有效的記憶體管理策略，以最小化慢速I/O操作的影響
+* 記憶體管理的兩個主要部分：
+  * 緩衝使用者資料 (Buffering User Data) → 使用緩衝區管理器 (Buffer Manager)
+  * 快取日誌記錄 (Caching Logs) → 使用日誌管理器 (Log Manager)
+
+## 緩衝使用者資料 (Buffering User Data)
+
+### 慢速I/O的影響 (Consequences of Slow I/Os)
+
+* 資料庫系統需要架構來最小化I/O操作：
+  * 以區塊為單位存取磁碟 (Block access)
+  * 自行管理區塊的快取 (Self-managed caching)
+  * 選擇耗費最少區塊I/O的計畫
+
+### 儲存存取模式 (Storage Access Patterns)
+
+* 空間局部性 (Spatial locality)：每個客戶端一次專注於少量區塊
+  * 例如：產品掃描 (product scan) 一次只需要兩個區塊（左右兩個表）
+* 時間局部性 (Temporal locality)：最近使用的區塊很可能在近期再次被使用
+  * 例如：目錄 (catalog) 的區塊
+
+### 透過快取最小化磁碟存取 (Minimizing Disk Access by Caching)
+
+* 核心概念：保留一組頁面 (pages) 池，保存最近使用區塊的內容
+  * 只有當池中沒有空頁面時才進行區塊的換入/換出
+* 好處：
+  * 經濟：只需少量記憶體空間
+  * 節省讀取：如果請求的區塊已在頁面中
+  * 節省寫入：對一個區塊的所有修改只需在換出時寫入一次
+
+### 為何不使用虛擬記憶體 (Why not virtual memory)
+
+* 虛擬記憶體 (Virtual Memory) 問題：
+  * 問題1：頁面替換演算法不佳（如FIFO, LRU等）
+    * 作業系統不知道哪些區塊將在近期被使用
+  * 問題2：無法控制的延遲寫入 (delayed writes)
+    * 自動換頁導致系統斷電時髒頁面可能丟失，破壞資料庫的恢復能力和交易的持久性
+* 資料庫自行管理頁面的優點：
+  * 更好的替換策略，控制換頁，減少I/O
+  * 支援元寫入 (meta-writes)，可以寫入日誌以從當機恢復
+
+### 緩衝哪些區塊？(What Blocks to Cache)
+
+* 使用者資料區塊 (數據庫包含目錄) → 由緩衝區管理器 (Buffer Manager) 管理
+* 日誌區塊 → 由日誌管理器 (Log Manager) 管理
+
+### 使用者區塊的存取模式 (Access Pattern to User Blocks)
+
+* 隨機區塊讀取和寫入
+* 多個執行緒對多個區塊的並行存取
+* 可預測的特定區塊存取
+  * 每個掃描一次需要特定的區塊
+  * 表格掃描每次需要一個區塊，並可以忘記剛讀過的內容
+
+### 緩衝區管理器 (Buffer Manager)
+
+* 為減少I/O，緩衝區管理器分配一組頁面，稱為緩衝池 (buffer pool)
+* 頁面應該是由作業系統持有的直接I/O緩衝區
+  * 避免虛擬記憶體的換頁
+  * 消除雙重緩衝的冗餘
+  * 例如：Java中的`ByteBuffer.allocateDirect()`
+
+### 固定區塊 (Pinning Blocks)
+
+* 每個表格掃描一次需要一個區塊
+  * 區塊的語意隱藏在關聯的`RecordFile`後面
+* `RecordFile`實例告訴記憶體管理器需要哪些區塊
+  * 每個執行緒/客戶端一個實例
+* 固定區塊的過程：
+  1. `RecordFile`要求緩衝區管理器在某個頁面中固定(pin)一個區塊
+  2. 客戶端存取頁面內容
+  3. 客戶端完成後，告訴緩衝區管理器取消固定(unpin)該區塊
+* 換出時，只有包含未固定區塊的頁面可以被換出
+
+### 固定頁面 (Pinning Pages)
+
+* 固定的結果：
+  1. 命中 (hit)：不需I/O
+  2. 換頁 (swapping)：緩衝池中至少有一個候選頁面持有未固定區塊
+     * 如果頁面是髒的 (dirty)，需要將頁面內容寫回磁碟
+     * 需根據替換策略選擇候選頁面
+     * 然後讀入所需的區塊
+  3. 等待 (waiting)：緩衝池中所有頁面都被固定
+     * 等待直到其他人取消固定一個頁面
+
+### 緩衝區 (Buffers)
+
+* 緩衝池中的每個頁面需要關聯額外信息：
+  * 包含的區塊是否被固定？
+  * 包含的區塊是否被修改 (dirty)？
+  * 替換策略所需的資訊
+* 緩衝區 (buffer) 包裝頁面並持有這些資訊
+* 一個區塊可被多個客戶端固定和存取
+  * 緩衝區必須是執行緒安全的
+  * 資料庫需要其他機制 (並行控制) 來序列化對緩衝區的衝突操作
+
+### 緩衝區替換策略 (Buffer Replacement Strategies)
+
+* 緩衝池中的所有緩衝區一開始都未分配
+* 一旦所有緩衝區都被載入，緩衝區管理器必須替換某個候選緩衝區中未固定的區塊
+* 最佳候選者？
+  * 包含在最長時間內不會被使用的區塊的緩衝區
+  * 最大化固定的命中率
+
+#### 緩衝區替換策略的類型
+
+* 由於無法確定未固定緩衝區中區塊的存取模式，需要啟發式方法：
+  * 天真 (Naïve) 策略
+  * FIFO (First In First Out) 策略
+  * LRU (Least Recently Used) 策略
+  * 時鐘 (Clock) 策略
+* 一些商業系統為不同緩衝類型使用不同啟發式方法
+  * 如目錄緩衝區、索引緩衝區、全表掃描的緩衝區等
+
+#### 天真策略 (Naïve Strategy)
+
+* 從頭開始順序遍歷緩衝池，替換第一個遇到的未固定緩衝區
+* 容易實現，但有問題：緩衝區使用不均勻，某些緩衝區可能包含過時資料，導致命中率低
+
+#### FIFO策略 (FIFO Strategy)
+
+* 選擇包含最早讀入區塊的緩衝區
+  * 每個緩衝區記錄區塊讀入時間
+* 未固定緩衝區可以維護在優先佇列中
+  * 在O(1)時間內找到目標未固定緩衝區
+* 假設：較舊的區塊在未來不太可能被使用
+  * 不一定有效，如目錄區塊經常使用
+
+#### LRU策略 (LRU Strategy)
+
+* 選擇包含最近最少使用區塊的緩衝區
+  * 每個緩衝區記錄區塊取消固定的時間
+* 假設：近期未使用的區塊在近期不太可能被使用
+  * 一般有效
+  * 避免替換常用頁面
+* 但對全表掃描仍不是最佳
+* 大多數商業系統使用LRU的簡單增強版本
+
+##### LRU變體
+
+* 在Oracle DBMS中，LRU佇列有兩個邏輯區域：
+  * 冷 (Cold) 區域在熱 (Hot) 區域之前
+  * 冷：使用LRU；熱：使用FIFO
+  * 對於全表掃描：將剛讀取的頁面放入頭部 (LRU端)
+
+#### 時鐘策略 (Clock Strategy)
+
+* 類似天真策略，但總是從上次替換位置開始遍歷
+* 盡可能均勻地使用未固定緩衝區，帶有LRU風格
+* 容易實現
+
+### 緩衝池大小 (Pool Size)
+
+* 所有當前被客戶端存取的區塊集合稱為工作集 (working set)
+* 理想情況下，緩衝池應該大於工作集
+  * 否則，可能發生死鎖 (deadlock)
+
+### 死鎖 (Deadlock)
+
+* 當固定時沒有候選緩衝區怎麼辦？
+  * 緩衝區管理器讓客戶端等待
+  * 當其他人取消固定一個區塊時通知客戶端再次固定
+* 死鎖情況：
+  * 客戶端A和B都想使用兩個緩衝區，但只剩兩個候選緩衝區
+  * 如果他們都獲得了一個緩衝區並嘗試獲取另一個，就會發生死鎖
+* 如何檢測死鎖？
+  * 沒有緩衝區在異常長時間內變得可用
+* 如何處理死鎖？
+  * 強制至少一個客戶端先取消固定它持有的所有區塊，然後一個一個重新固定
+
+### 自死鎖 (Self-Deadlock)
+
+* 客戶端固定的區塊多於緩衝池容量
+* 發生情況：
+  * 緩衝池太小
+  * 客戶端惡意（幸運的是，我們自己編寫客戶端/RecordFile）
+* 如何處理？
+  * 固定大小的緩衝區管理器別無選擇，只能拋出異常
+* 緩衝池應足夠大，至少能容納單個客戶端的工作集
+* 好的客戶端應節約固定區塊：
+  * 完成時立即取消固定區塊
+  * 在JDBC中迭代ResultSet後調用close()
+
+## 快取日誌 (Caching Logs)
+
+### 為何需要日誌？(Why logging?)
+
+* 為確保交易的ACID屬性：
+  * 原子性 (Atomicity)：交易中的所有操作要麼全部成功(交易提交)，要麼全部失敗(交易回滾)
+  * 一致性 (Consistency)：交易前後，數據不會違反任何設定的規則
+  * 隔離性 (Isolation)：多個交易可以並行執行，但不會互相干擾
+  * 持久性 (Durability)：一旦交易提交，它所做的任何更改永久保存在數據庫中
+
+### 天真的C和I實現 (Naïve C and I)
+
+* 觀察：沒有跨數據庫存取數據的交易
+* 為確保C和I，每個交易可以簡單地鎖定整個數據庫
+  * 在開始時獲取鎖
+  * 在提交或回滾時釋放鎖
+* 數據庫內沒有並行交易
+  * CPU和I/O之間沒有流水線處理
+
+### 天真的A和D實現 (Naïve A and D)
+
+* D在有緩衝區的情況下？
+* 在提交交易前刷新交易的所有髒緩衝區
+  * 交易提交後返回DBMS客戶端
+* 系統崩潰然後恢復怎麼辦？
+  * 為確保A，DBMS需要在啟動時回滾未提交的交易
+* 問題：
+  * 如何確定哪些交易要回滾？
+  * 如何回滾交易所做的所有動作？
+
+### 預寫日誌 (Write-Ahead-Logging, WAL)
+
+* 記錄每個交易修改的日誌
+  * 例如：<SETVAL, <TX>, <BLK>, <OFFSET>, <VAL_TYPE>, <OLD_VAL>>
+  * 在記憶體中以節省I/O
+* 提交交易：
+  1. 在刷新緩衝區前將所有相關日誌寫入日誌文件
+  2. 刷新後，將<COMMIT, <TX>>日誌寫入日誌文件
+* 交換髒緩衝區：
+  * 在刷新用戶區塊前必須刷新所有日誌
+* 確定回滾交易：沒有COMMIT日誌的交易
+* 如何回滾：撤銷已記錄到磁盤的操作，刷新所有受影響的區塊，然後寫入<ROLLBACK, <TX>>日誌
+
+### WAL的假設
+
+* 每個區塊寫入要麼完全成功，要麼完全失敗，即使電源故障
+  * 即崩潰後沒有損壞的日誌區塊
+  * 現代磁盤通常在斷電時儲存足夠的電力完成正在進行的扇區寫入
+  * 如果區塊大小等於扇區大小或使用日誌文件系統（如EXT3/4, NTFS）則有效
+
+### 快取日誌 (Caching Logs)
+
+* 像用戶區塊一樣，日誌文件的區塊也被快取
+  * 每個交易操作被記錄到記憶體中
+  * 日誌區塊只在以下情況刷新：
+    * 交易提交
+    * 緩衝區交換
+  * 避免過多的I/O
+
+### 日誌區塊是否需要緩衝池？
+
+#### 存取模式比較
+
+* 用戶區塊：
+  * 多個文件
+  * 隨機讀取、寫入和追加
+  * 多個工作執行緒（每個JDBC客戶端一個執行緒）的並行存取
+* 日誌區塊：
+  * 單一日誌文件
+  * 始終由多個工作執行緒追加
+  * 始終由單個恢復執行緒在啟動時順序向後讀取
+
+#### 一個緩衝區足夠 (One Buffer Is Enough)
+
+* 對於（順序前向）追加：
+  * 所有工作執行緒"固定"同一文件的尾部區塊
+  * 只需一個緩衝區
+* 對於順序向後讀取：
+  * 恢復執行緒"固定"正在讀取的區塊
+  * 只有一個恢復執行緒
+  * 只需一個緩衝區
+* DBMS需要額外的日誌管理器來實現這種專門的日誌區塊記憶體管理策略
+
+### 日誌序列號 (Log Sequence Number, LSN)
+
+* 每個日誌記錄有一個唯一標識符，稱為日誌序列號
+  * 通常是區塊ID + 起始位置
+* `flush(lsn)`刷新所有LSN不大於lsn的日誌記錄
+
+### 讀取的快取管理 (Cache Management for Read)
+
+* 提供向後迭代日誌記錄的日誌迭代器
+* 內部上，迭代器分配一個頁面，始終保存當前日誌記錄所在的區塊
+* 最佳：更多頁面不會幫助節省I/O
+
+### 追加的快取管理 (Cache Management for Append)
+
+* 永久分配一個頁面P來保存日誌文件的尾部區塊
+* 當調用`append(rec)`時：
+  1. 如果P中沒有空間，則將頁面P寫回磁盤並清除其內容
+  2. 將新日誌記錄添加到P
+* 當調用`flush(lsn)`時：
+  1. 如果該日誌記錄在P中，則將P寫入磁盤
+  2. 否則，不做任何事情
+* 最佳：更多頁面不會幫助節省I/O
+
+## LogMgr in VanillaCore
+
+* 在`storage.log`包中
+* 單例模式
+* 在系統啟動期間通過`VanillaDb.initFileAndLogMgr(dbname)`構建
+* 通過`VanillaDb.logMgr()`獲取
+* `append`方法將日誌記錄追加到日誌文件，並返回記錄的LSN
+  * 不保證記錄將寫入磁盤
+* 客戶端可以通過調用`flush`強制特定日誌記錄及其所有前任寫入磁盤
+* VanillaCore簡化了LSN為區塊號
+  * 一個區塊中的所有日誌記錄被分配相同的LSN，因此一起刷新
+
+### BasicLogRecord
+
+* 日誌記錄中值的迭代器
+* 日誌管理器只實現記憶體管理策略
+  * 不理解日誌記錄的內容
+  * 是恢復管理器定義日誌記錄的語義
+
+### LogIterator
+
+* 客戶端可以通過調用LogMgr中的`iterator`方法讀取日誌文件中的記錄
+  * 返回一個LogIterator實例
+* 調用`next`返回從尾部逆序的下一個BasicLogRecord
+* 這是恢復管理器希望看到日誌的方式
+
+## BufferMgr in VanillaCore
+
+* 每個交易都有自己的BufferMgr
+* 在創建交易時通過`transactionMgr.newTransaction(...)`構建
+* 通過`transaction.bufferMgr()`獲取
+* 交易的BufferMgr負責跟踪哪些緩衝區被交易固定，在沒有可用緩衝區時讓交易等待
+* `flush()`刷新被指定交易修改的每個緩衝區
+* `available()`返回持有未固定緩衝區的緩衝區數量
+
+### BufferPoolMgr
+
+* BufferPoolMgr是一個單例對象，對外部世界隱藏在buffer包中
+* 它為所有頁面管理緩衝池，並實現時鐘緩衝區替換策略
+  * 磁盤存取的細節對客戶端未知
+
+### Buffer
+
+* 包裝頁面並存儲：
+  * 持有區塊的ID
+  * 固定計數
+  * 修改信息
+  * 日誌信息
+* 支持WAL：
+  * `setVal()`需要一個LSN
+    * 必須在`LogMgr.append()`之後
+  * `flush()`調用`LogMgr.flush(maxLsn)`
+    * 由BufferMgr在交換時調用
+
+### PageFormatter
+
+* BufferMgr的`pinNew(fmtr)`方法向文件追加新區塊
+* PageFormatter初始化區塊
+  * 在定義記錄語義的包中擴展（如`storage.record`和`storage.index.btree`）
+
+# 資料記錄管理（Record Management）
+
+## 概述（Overview）
+
+- 記錄管理（Record Management）是資料庫系統中的核心組件，負責處理資料儲存和檢索
+- 位於資料庫系統架構中的儲存層（Storage Layer）內
+- 在 VanillaCore 系統中，Record 模組與其他模組如 Concurrency、Recovery、Metadata、Index、Buffer 等協同工作
+
+## 資料存取層級（Data Access Layers）
+
+- 資料庫系統按照層級組織資料：
+  - 頂層：記錄檔案（RecordFile）—— 包含記錄頁（RecordPage）和記錄
+  - 中層：緩衝區管理（BufferMgr）—— 處理頁面在記憶體中的緩存
+  - 底層：檔案管理（FileMgr）—— 處理檔案和區塊的實際儲存
+
+## 記錄檔案的主要責任（Responsibilities of RecordFile）
+
+1. **決定記錄在檔案中的儲存方式**
+   - 設計記錄的物理結構和佈局
+
+2. **決定要固定（pin）哪些區塊**
+   - 降低對緩衝區存取的成本
+   - 管理記錄頁的載入和卸載
+
+3. **與復原和並行管理器協作**
+   - 確保交易（Transaction）的 ACID 特性
+   - 處理並行控制和復原機制
+
+## 記錄管理器的設計考量（Design Considerations for Record Manager）
+
+### 檔案同質性（File Homogeneity）
+
+#### 同質檔案 vs. 異質檔案（Homogeneous vs. Heterogeneous Files）
+- **同質檔案**：所有記錄都來自相同的資料表
+  - 優點：簡化單表查詢
+- **異質檔案**：包含來自不同資料表的記錄
+  - 優點：可以針對連接（join）查詢進行優化
+  - 缺點：單表查詢效率較低，非叢集欄位的連接效率降低
+  - 適用於具有層次關係的結構
+
+### 記錄跨區段性（Record Spanning）
+
+#### 跨區段記錄 vs. 非跨區段記錄（Spanned vs. Unspanned Records）
+- **跨區段記錄**：記錄的值可以跨越多個區塊
+  - 優點：不浪費磁碟空間，記錄大小不受區塊大小限制
+  - 缺點：讀取一條記錄可能需要多次區塊存取和重構
+- **非跨區段記錄**：每條記錄完全存在於一個區塊內
+  - 優點：讀取效率高，實現簡單
+  - 缺點：可能因為區塊大小限制導致記錄大小受限
+
+### 欄位長度（Field Length）
+
+#### 固定長度 vs. 可變長度欄位（Fixed-Length vs. Variable-Length Fields）
+- **固定長度欄位**：為每個欄位分配固定字節數
+  - 優點：隨機存取容易實現
+  - 缺點：可能浪費空間
+- **可變長度欄位**：欄位佔用空間根據實際內容決定
+  - 三種實現方式：
+    1. 可變長度表示法：節省空間但修改可能導致記錄重排
+    2. 索引表示法：將字串值存在單獨位置
+    3. 固定長度表示法：每個記錄分配相同空間
+
+### 資料儲存方向（Data Storage Orientation）
+
+#### 列導向 vs. 行導向儲存（Column-Store vs. Row-Store）
+- **行導向儲存**：記錄按行順序存儲
+  - 優點：單行存取效率高，寫入優化
+  - 適用於 OLTP 工作負載
+- **列導向儲存**：單列的值連續存儲
+  - 優點：列讀取和計算高效（如分組和聚合）
+  - 適用於 OLAP 工作負載
+
+### 空間管理（Free Space Management）
+
+#### 空間管理策略
+1. **鏈式（Chaining）**：鏈接所有空閒空間
+2. **元頁面（Meta-Pages）**：使用特殊頁面追蹤記錄頁使用情況
+3. **元檔案（Meta-File）**：使用額外檔案追蹤所有空閒空間位置和大小
+
+## VanillaCore 記錄管理器的實現（Implementation of VanillaCore Record Manager）
+
+### 記錄儲存方式（How Records are Stored）
+- 採用**非跨區段記錄**
+- 使用**同質檔案**
+- 採用**行導向儲存**
+- 使用**固定長度欄位**
+- 使用**鏈式空閒空間管理**：搜尋時間 O(1)
+
+### 關鍵組件（Key Components）
+1. **記錄頁（RecordPage）**：
+   - 管理記錄在頁面中的佈局
+   - 分割為槽（slot），每個槽首整數為使用標記（0=空，1=使用中）
+   - 最小槽大小：4+4+8 位元組（標記、指向下一個被刪除槽的指針）
+
+2. **記錄 ID（RecordId）**：
+   - 記錄的唯一標識符
+   - 對於固定長度實現，ID 等於槽號
+
+3. **檔案頭頁（FileHeaderPage）**：
+   - 管理檔案頭資訊
+   - 包含指向已刪除槽鏈的指針和尾部槽
+
+4. **表資訊（Table Information）**：
+   - 儲存記錄長度、欄位名稱、類型、長度和偏移量
+   - 透過 `storage.metadata.TableInfo` 和 `sql.Schema` 類管理
+
+### 固定區塊策略（Pinning Blocks）
+- 每個 RecordFile 實例僅固定兩個頁面：
+  - 當前位置對應的 RecordPage
+  - FileHeaderPage
+- 在 close() 時解除固定（unpin）
+  - 這就是為什麼 JDBC 用戶應該盡快關閉 ResultSet
+
+### 事務支援（Transaction Support）
+- **一致性（C）和隔離性（I）**：與並行管理器（ConcurrencyManager）協作
+  - 所有讀/寫操作必須透過 `concurrencyMgr.read/modifyXxx()` 獲取適當鎖
+- **原子性（A）和持久性（D）**：與復原管理器（RecoveryManager）協作
+  - 所有值的設定通過 `recoveryMgr.logXxx()` 進行日誌記錄
+  - 藉助記憶體管理層中的 WAL（Write-Ahead Logging）實現
+
+# 交易管理 (Transaction Management) 第一部分：併發控制 (Concurrency Control)
+
+## 1. 交易排程 (Schedules)
+
+### 1.1 交易簡介 (Transaction Introduction)
+- 交易確保ACID特性（原子性、一致性、隔離性、持久性）
+  - **一致性 (Consistency)**: 交易將使資料庫保持一致狀態，滿足所有完整性約束條件
+  - **隔離性 (Isolation)**: 交易間的交錯執行應具有與某種序列執行相同的效果
+
+### 1.2 交易排程 (Transaction Schedules)
+- **排程 (Schedule)**: 來自一組交易的操作/動作列表
+- **序列排程 (Serial Schedule)**: 不同交易的操作沒有交錯執行的排程
+- **等價排程 (Equivalent Schedules)**: 執行第一個排程的效果與執行第二個排程的效果相同
+- **可序列化排程 (Serializable Schedule)**: 等價於某些交易序列執行的排程
+
+### 1.3 並行交易 (Concurrent Transactions)
+- **優點**:
+  - 增加吞吐量（通過CPU和I/O管道）
+  - 縮短短交易的響應時間
+- 交易交錯執行可提高並行性，但需確保可序列化性
+
+## 2. 異常情況 (Anomalies)
+
+### 2.1 衝突操作 (Conflict Operations)
+- 如果兩個操作在同一對象上由不同交易執行，且至少一個是寫操作，則它們衝突
+- **類型**:
+  - 寫-讀衝突 (Write-Read Conflict)
+  - 讀-寫衝突 (Read-Write Conflict)
+  - 寫-寫衝突 (Write-Write Conflict)
+  - 讀-讀不存在衝突 (No Read-Read Conflict)
+
+### 2.2 寫-讀衝突異常 (Write-Read Conflict Anomalies)
+- 讀取未提交數據（髒讀）
+- 不可恢復的排程
+  - 如果T1中止，會導致連鎖回滾問題
+
+### 2.3 讀-寫衝突異常 (Read-Write Conflict Anomalies)
+- 不可重複讀問題 (Unrepeatable Reads)
+  - 同一交易內的多次讀取獲得不同結果
+
+### 2.4 寫-寫衝突異常 (Write-Write Conflict Anomalies)
+- 丟失更新問題 (Lost Updates)
+  - 一個交易的寫入被另一個交易覆蓋
+
+### 2.5 避免異常 (Avoiding Anomalies)
+- 確保交易間所有衝突操作按相同順序執行
+- 確保衝突可序列化性 (Conflict Serializability)
+- 也需要確保可恢復性 (Recoverability)
+  - 定義：若每個交易T僅在其讀取變更的所有交易提交後才提交，則排程是可恢復的
+
+## 3. 基於鎖的併發控制 (Lock-based Concurrency Control)
+
+### 3.1 鎖和鎖定 (Locks and Locking)
+- **鎖 (Lock)**: 長期、交易級別的
+- **鎖存器 (Latch)**: 短期、數據結構/算法級別的
+- DBMS應只允許可序列化、可恢復的排程
+
+### 3.2 二階段鎖協議 (Two-Phase Locking Protocol, 2PL)
+- 定義兩種鎖:
+  - 共享鎖 (Shared Lock, S)
+  - 排他鎖 (Exclusive Lock, X)
+- **階段1：增長階段**
+  - 交易必須在讀取（寫入）對象前獲得S（X）鎖
+- **階段2：收縮階段**
+  - 交易一旦釋放任何鎖，就不能請求額外的鎖
+- 確保衝突可序列化性
+
+### 3.3 嚴格二階段鎖 (Strict Two-Phase Locking, S2PL)
+- 交易獲取鎖如2PL增長階段，但保持所有鎖直到完成
+- 允許嚴格 (Strict) 和可序列化排程
+- 避免級聯回滾 (Cascading Rollbacks)
+- 仍存在死鎖問題 (Deadlock Problem)
+
+### 3.4 解決死鎖 (Coping with Deadlocks)
+- 交易循環等待彼此釋放鎖
+- **檢測**: 等待圖 (Waits-for Graph)
+- **其他技術**:
+  - 超時和回滾 (Timeout & Rollback)：死鎖檢測
+  - 等待死亡 (Wait-Die)：死鎖預防
+  - 保守鎖定 (Conservative Locking)：死鎖預防
+
+### 3.5 鎖的粒度 (Granularity of Locks)
+- 鎖定什麼"對象"？(What "objects" to lock?)
+  - 記錄、塊、表/文件 (Records vs. Blocks vs. Tables/Files)
+- 鎖定對象的粒度:
+  - 細粒度：高並發，高鎖定開銷
+  - 粗粒度：低鎖定開銷，低並發
+
+### 3.6 多粒度鎖 (Multiple-Granularity Locks)
+- 允許用戶在包含其他對象的對象上設置鎖
+- 新增意向鎖 (Intention Locks):
+  - 意向共享鎖 (Intention-Shared, IS)
+  - 意向排他鎖 (Intention-Exclusive, IX)
+  - 共享意向排他鎖 (Shared and Intention-Exclusive, SIX)
+- 鎖相容性矩陣決定哪些鎖模式可以同時持有
+- 多粒度鎖定要求根據協議規則自根至葉獲取鎖
+
+## 4. 動態數據庫 (Dynamic Databases)
+
+### 4.1 幻象問題 (Phantom)
+- 因插入操作造成的幻象 (Phantoms Caused by Insertion)
+- 因更新操作造成的幻象 (Phantoms Caused by Update)
+- 解決方法:
+  - EOF鎖或多粒度鎖 (EOF Locks or Multi-granularity Locks)
+  - 索引（或謂詞）鎖定 (Index or Predicate Locking)
+
+### 4.2 隔離級別 (Isolation Levels)
+- ANSI/ISO SQL標準定義的隔離級別:
+  - **讀未提交 (Read Uncommitted)**: 可能髒讀、不可重複讀、幻象
+  - **讀已提交 (Read Committed)**: 無髒讀、可能不可重複讀和幻象
+  - **可重複讀 (Repeatable Read)**: 無髒讀、無不可重複讀、可能幻象
+  - **可序列化 (Serializable)**: 無髒讀、無不可重複讀、無幻象
+- 隔離級別實現:
+  - 通過不同的鎖持有策略實現不同隔離級別
+  - 交易特性可由SQL指定:
+    - 存取模式 (Access Model): READ ONLY 或 READ WRITE
+    - 隔離級別 (Isolation Level): 通過 Connection.setTransactionIsolation()
+
+## 5. 元結構 (Meta-structures)
+
+### 5.1 元結構簡介 (Meta-structures Introduction)
+- DBMS除用戶感知數據外還維護一些元結構
+  - 例如：RecordFile中的FileHeaderPage
+
+### 5.2 元結構的併發控制 (Concurrency Control of Meta-structures)
+- 文件頭頁的訪問發生在記錄插入/刪除時
+- 文件頭頁鎖可提前釋放 (Early Lock Release)
+  - 不會泄露"數據"，不損害隔離性
+  - 提高插入/刪除操作的並發性
+  - 需要特別注意確保原子性和持久性
+
+## 6. VanillaCore中的併發管理器 (Concurrency Manager in VanillaCore)
+
+### 6.1 併發管理器實現 (Concurrency Manager Implementation)
+- 在storage.tx.concurrency包中
+- 基於鎖的協議:
+  - MGL粒度：文件、塊和記錄
+  - S2PL實現
+  - 死鎖檢測：時間限制策略
+- 支持不同隔離級別的交易同時運行:
+  - 可序列化 (Serializable)
+  - 可重複讀 (Repeatable Read)
+  - 讀已提交 (Read Committed)
+
+### 6.2 實際中的鎖模式 (Lock Modes in Practice)
+- 根據操作類型和隔離級別選擇不同鎖模式
+- 決定什麼鎖要沿著訪問路徑獲取
+- 三種隔離級別的併發管理器:
+  - SerializableConcurrencyMgr
+  - RepeatableRead1ConcurrencyMgr
+  - ReadCommittedConcurrencyMgr
+
+### 6.3 鎖表 (Lock Table)
+- 實現鎖的相容性表
+- 使用時間限制策略解決死鎖
+
+# 交易管理第二部分：復原（Transaction Management Part II: Recovery）
+
+## 資料庫管理系統中的失敗（Failure in a DBMS）
+
+* 失敗類型：
+  * 硬碟損壞（Disk crash）
+  * 電源故障（Power outage）
+  * 軟體錯誤（Software error）
+  * 災難（Disaster），如火災
+* 本講義僅考慮以下類型故障：
+  * 交易掛起（Transaction hangs）
+    * 邏輯掛起（Logical hangs）：例如資料未找到、溢位、錯誤輸入
+    * 系統掛起（System hangs）：例如死鎖（deadlock）
+  * 系統掛起/當機（System hangs/crashes）
+    * 硬體錯誤或使DBMS掛起的軟體錯誤
+
+### 關於失敗的假設（Assumptions about Failure）
+* 非揮發性儲存裝置的內容不會損壞
+  * 例如通過檔案系統日誌（file-system journaling）保護
+* 無拜占庭故障（No Byzantine failure）（無殭屍進程）
+* 其他類型的失敗將通過其他方法處理
+  * 例如通過複製（replication）、仲裁（quorums）等
+
+## 簡單的原子性與持久性（Naïve A and D）
+
+* 當交易要提交（commit）時：
+  * 在提交交易並返回給客戶端前，先將交易的所有髒緩衝區（dirty buffers）刷寫到硬碟
+* 系統當機後重啟時：
+  * 為確保原子性（Atomicity），DBMS需要在啟動時回滾（rollback）未提交的交易
+  * 問題：
+    * 如何確定哪些交易需要回滾？
+    * 如何回滾交易所做的所有操作？
+
+### 預寫日誌（Write-Ahead-Logging, WAL）方法
+
+* 記錄交易所做的每次修改
+  * 例如：`<SETVAL, <TX>, <BLK>, <OFFSET>, <VAL_TYPE>, <OLD_VAL>>`
+  * 儲存在記憶體中以節省I/O
+* 提交交易時：
+  1. 在刷寫任何緩衝區之前，將所有相關日誌寫入日誌檔案
+  2. 刷寫後，將`<COMMIT, <TX>>`日誌寫入日誌檔案
+* 交換髒緩衝區時（在BufferMgr中）：
+  * 在刷寫緩衝區之前，必須先刷寫所有日誌
+
+### 回滾機制（Rollback）
+
+* 確定需要回滾的交易：
+  * 觀察：有COMMIT日誌的交易必已將所有髒區塊刷寫到硬碟
+  * 回滾沒有COMMIT日誌的交易
+* 如何回滾交易：
+  * 將日誌記錄的舊值寫回，刷寫所有受影響的區塊，再寫入`<ROLLBACK, <TX>>`日誌
+* WAL的假設：即使在電源故障情況下，每個區塊寫入要麼完全成功要麼完全失敗
+  * 現代硬碟通常在斷電時有足夠電力完成正在進行的扇區寫入
+  * 當區塊大小等於扇區大小或使用日誌檔案系統時，此假設有效
+
+### 日誌快取（Caching Logs）
+
+* 與使用者區塊類似，日誌檔案的區塊也會被快取
+  * 每個交易操作都記錄在記憶體中
+  * 避免過多I/O
+* 日誌區塊只有在以下情況才會刷寫：
+  * 交易提交時
+  * 刷寫資料緩衝區時
+
+## 與復原相關的系統組件（System Components related to Recovery）
+
+* 日誌管理器（Log Manager）：管理日誌的快取
+  * 不理解日誌的語義
+* 緩衝區管理器（Buffer Manager）：確保每個刷寫的資料緩衝區都遵循WAL
+* 復原管理器（Recovery Manager）：確保原子性和持久性，決定：
+  * 記錄什麼（從語義上）
+  * 何時刷寫緩衝區（和日誌尾部）
+  * 如何回滾交易
+  * 如何從當機中恢復資料庫
+
+### 復原管理器的操作（Actions of Recovery Manager）
+
+* 正常交易處理期間的操作：
+  * 將日誌記錄添加到快取
+  * 在COMMIT時刷寫日誌尾部和緩衝區
+  * 或者回滾交易（通過撤銷交易所做的變更）
+* 系統重啟後的操作：
+  * 將資料庫恢復到一致狀態
+  * 撤銷所有未完成交易所做的變更
+  * 在專用恢復交易中進行（在所有正常交易啟動前）
+
+## 日誌記錄（Log Records）
+
+* 復原管理器在日誌中保存資訊以便能夠回滾交易
+* 每當發生可記錄活動時，復原管理器向日誌快取添加日誌記錄：
+  * 開始（Start）
+  * 提交（Commit）
+  * 回滾（Rollback）
+  * 更新記錄（Update record）
+  * 檢查點（Checkpoint）
+
+### 為何需要COMMIT/ROLLBACK日誌
+
+* 用於在恢復期間識別未完成的交易
+* 未完成交易：例如沒有COMMIT/ROLLBACK日誌在硬碟上的交易
+
+### 刷寫COMMIT
+
+* 提交交易時，必須在返回用戶之前刷寫COMMIT日誌
+* 如果系統返回給客戶端但在寫入提交日誌之前當機：
+  * 復原管理器會將其視為未完成交易並撤銷其所有變更
+  * 危及持久性（Durability）
+
+## 區塊鎖存（Latching on Blocks）
+
+* 修改區塊時：
+  1. 獲取該區塊的鎖存（latch）
+  2. 記錄更新（在記憶體中，由LogMgr完成）
+  3. 執行變更
+  4. 釋放鎖存
+* 刷寫包含區塊的緩衝區時：
+  1. 在pin()後獲取該區塊的鎖存
+  2. 刷寫相應的日誌記錄
+  3. 刷寫緩衝區
+  4. 釋放鎖存
+* 鎖存與以下無關：
+  * S2PL中的鎖（Locks）
+  * BufferMgr中的釘住/釋放（Pinning/unpinning）
+
+## 只撤銷恢復（UNDO-only Recovery）
+
+### 未完成交易的定義
+
+* 在硬碟上的日誌檔案中沒有COMMIT或ROLLBACK記錄的交易
+* 當機發生時可能處於以下任何狀態：
+  1. 活躍狀態（Active）
+  2. 提交中（但尚未完成）
+  3. 回滾中（Rolling back）
+
+### 只撤銷恢復算法
+
+* 逐個處理日誌記錄（從尾部向頭部）
+* 識別已完成的交易（有COMMIT或ROLLBACK記錄）
+* 對於未完成的交易的每個更新記錄，撤銷變更
+* 最後刷寫所有髒緩衝區並寫入檢查點記錄
+
+## 強制與非強制（Force vs. No-Force）
+
+* 強制方法：
+  * 提交交易時，所有修改需要在返回用戶前寫入硬碟
+* 非強制方法：
+  * 僅寫入日誌而不刷寫所有髒區塊
+  * 優點：更快的提交
+  * 問題：已提交交易可能未反映到硬碟上
+  * 解決方案：在恢復中添加一個新的重做（REDO）階段
+
+## 撤銷-重做恢復（UNDO-REDO Recovery）
+
+* 對於每個完成的交易執行重做
+* 對於每個未完成的交易執行撤銷
+* 撤銷和重做操作是冪等的（idempotent）
+  * 執行同一撤銷操作多次=執行一次
+
+### 快速回滾（Fast Rollback）
+
+* 非強制策略：
+  * 回滾期間不刷寫髒頁
+  * 甚至不需要保留ROLLBACK記錄在快取中
+* 已中止交易將在啟動恢復期間再次回滾
+  * 由於撤銷操作是冪等的，不會損害一致性（C）
+
+### 先撤銷還是先重做？
+
+* 撤銷階段必須在重做階段之前
+* 否則，一致性（C）可能會因已中止交易而損壞
+
+## 偷取與非偷取（Steal vs. No Steal）
+
+* 當前，髒緩衝區可以在交易提交前刷寫到硬碟
+  * 由於交換（swapping）
+  * 稱為偷取方法
+* 如果不偷取，則不需要撤銷階段！
+  * 只重做恢復
+* 實現方法：
+  * 將所有修改過的緩衝區釘住直到交易結束？
+  * 非偷取方法在實際中不可行
+
+## 在恢復期間再次當機（Failures during Recovery）
+
+* 如果系統在恢復過程中再次當機，可以在重啟後簡單地重新運行恢復（從頭開始）
+* 由於每個撤銷/重做是冪等的，這是安全的
+* 不需要記錄撤銷/重做操作
+  * 對於因撤銷/重做而進行的每個資料修改，復原管理器向緩衝區管理器傳遞-1作為LSN號
+
+## 檢查點（Checkpointing）
+
+* 隨著系統持續處理請求，日誌檔案可能變得非常大
+  * 運行恢復過程耗時
+  * 能否只讀取部分日誌？
+* 檢查點是DBMS狀態的一致快照
+  * 所有較早的日誌記錄都由"已完成"的交易寫入
+  * 這些交易的修改已刷寫到硬碟
+* 恢復時，復原管理器可以忽略檢查點之前的所有日誌記錄
+
+### 靜態檢查點（Quiescent Checkpointing）
+
+1. 停止接受新交易
+2. 等待現有交易完成
+3. 刷寫所有修改過的緩衝區
+4. 將靜態檢查點記錄附加到日誌並刷寫到硬碟
+5. 開始接受新交易
+
+### 非靜態檢查點（Nonquiescent Checkpointing）
+
+* 靜態檢查點簡單但可能使系統在檢查點過程中太長時間不可用
+* 非靜態檢查點允許系統在檢查點處理期間繼續運行
+* 工作機制：
+  * 在步驟3和4之間，不允許任何交易附加日誌或修改緩衝區
+  * 檢查點交易在步驟3之前獲取日誌檔案的鎖存和BufferMgr中所有區塊的鎖存
+  * 在步驟4之後釋放這些鎖存
+
+### 何時進行檢查點？
+
+* 定期進行檢查點可使恢復過程更高效
+* 檢查點的好時機：
+  * 系統啟動時（恢復完成後且任何交易開始前）
+  * 工作負載低的執行時間（例如午夜）
+
+## 邏輯日誌（Logical Logging）
+
+### 提早釋放鎖（Early Lock Release）
+
+* DBMS中存在元結構（meta-structures）
+  * 例如，RecordFile中的FileHeaderPage
+  * 索引（Indices）
+* 如果以嚴格方式鎖定，性能會較差
+  * 例如，FileHeaderPage上的S2PL使所有插入和刪除序列化
+* 元結構上的鎖通常提早釋放
+
+### 邏輯操作（Logical Operations）
+
+* 向RecordFile進行邏輯插入：
+  * 按順序獲取FileHeaderPage和目標對象的鎖
+  * 執行插入
+  * 釋放FileHeaderPage的鎖（但不釋放對象的鎖）
+* 提高並發性
+* 不損害一致性
+* 需要特別注意以確保原子性和持久性
+
+### 邏輯操作的問題
+
+* 當兩個交易修改同一元結構（如FileHeaderPage）時，如果使用物理撤銷記錄回滾一個交易，可能會丟失另一個交易的修改
+* 解決方案：邏輯操作需要邏輯撤銷
+
+### 撤銷部分邏輯操作
+
+* 如果交易在邏輯操作中途中止：
+  * 記錄邏輯操作期間執行的每個物理操作
+  * 部分邏輯操作可以通過撤銷物理操作來撤銷
+
+## 重複歷史恢復（Recovery by Repeating History）
+
+* 基本思想：
+  1. 重複歷史：按照確切發生順序重放所有依賴的物理操作（從最後一個檢查點開始）
+     * 包括正在進行的回滾/撤銷
+     * 這樣記憶體狀態可以正確重建
+  2. 恢復所有未完成交易的回滾
+     * 對每個已完成的邏輯操作進行邏輯回滾
+* 這導致了最先進的恢復算法ARIES
+* 步驟1/2在ARIES中稱為REDO/UNDO階段
+
+### 補償日誌（Compensation Logs）
+
+* 重放歷史包括重放以前的撤銷
+* 如何在單一階段（日誌掃描）中重放歷史？
+* 當撤銷物理操作時，在LogMgr中添加該撤銷的重做日誌，稱為補償日誌
+* 在恢復過程中，RecoveryMgr可以通過重做物理和補償日誌來重放歷史
+  * 按照它們在日誌檔案中出現的順序（從檢查點到尾部）
+
+### REDO-UNDO恢復算法（假設無邏輯操作）
+
+* 在REDO階段識別未完成交易並保存到撤銷列表中
+* 可以處理恢復期間重複的當機
+
+### 支援邏輯操作
+
+* 重複歷史（REDO）按照確切發生順序執行物理操作
+* 適用於依賴的物理操作
+
+### REDO-UNDO恢復算法（支援邏輯操作）
+
+* REDO：重複歷史
+  * 重放物理和補償日誌
+* UNDO：
+  * 對物理和未完成的邏輯操作進行物理撤銷
+  * 對已完成的邏輯操作進行邏輯撤銷
+  * 跳過所有已中止的邏輯操作
+* 在UNDO階段繼續記錄：
+  * 物理撤銷的補償日誌
+  * 邏輯撤銷的物理日誌
+
+### 非冪等邏輯操作
+
+* 邏輯操作及其邏輯撤銷不是冪等的
+* 已完成的邏輯操作和邏輯撤銷使用物理日誌重複
+  * 在REDO階段
+  * "歷史"增長
+* UNDO階段必須跳過已完成的邏輯撤銷
+
+### 更快的檢查點
+
+* 活躍交易列表
+  * 每個交易的最近LSN
+* 髒頁列表
+  * RecLSN：反映到硬碟的最新日誌
+  * PageLSN
+* 無需刷寫頁面
+
+### 恢復回滾（Resume Rollbacks）
+
+* 如何在UNDO階段恢復所有未完成交易的回滾？
+* 對每個未完成交易：
+  * 已完成的邏輯撤銷必須跳過
+  * 已完成的物理撤銷可以跳過（可選；僅為提高性能）
+
+### PrevLSN和UndoNextLSN指針
+
+* 記錄：
+  * 每個物理日誌保存PrevLSN
+  * 每個補償日誌保存UndoNextLSN
+* RecoveryMgr：
+  * 記住撤銷列表中每個交易的最後UndoNextLSN
+  * UNDO階段處理的下一個LSN是UndoNextLSNs的最大值
+* 交易回滾可以恢復
+
+## 生理日誌（Physiological Logging）
+
+### 物理日誌的問題
+
+* 物理日誌數量龐大！
+* 例如，如果系統想要將記錄插入到排序檔案中（維護索引時常見）
+
+### 生理日誌的優點
+
+* 觀察：在排序操作期間，對同一區塊的所有物理操作將在一次刷寫中寫入硬碟
+* 為何不將所有這些物理操作記錄為一個邏輯操作？
+  * 只要這個邏輯操作可以邏輯撤銷
+* 生理日誌的特點：
+  * 跨區塊為物理的
+  * 在每個區塊內為邏輯的
+* 顯著節省物理日誌的成本
+* 但進一步複雜化恢復算法
+  * 因為REDOs不再是冪等的
+  * 需要避免重複重放
+
+### REDO-UNDO恢復算法（支援生理日誌）
+
+* 在REDO期間，跳過先前已重放的所有生理操作及其補償
+* 在UNDO期間，將每個生理操作視為物理操作
+  * 寫入也是生理操作的補償日誌
+
+### 避免重複重放
+
+* 為每個區塊保留PageLSN
+  * 該區塊的最新日誌
+* REDO階段：
+  * 僅當LSN大於目標區塊的PageLSN時才重放生理日誌
+* 在ARIES中進一步優化
+
+## VanillaDB復原管理器（The VanillaDB Recovery Manager）
+
+* 日誌粒度：值（values）
+* 實現ARIES恢復算法
+  * 偷取（steal）和非強制（non-force）
+  * 生理日誌
+  * 無優化
+* 非靜態檢查點（定期）
+* 相關包：
+  * storage.tx.recovery
+* 公共類：
+  * RecoveryMgr
+  * 每個交易有自己的復原管理器
+
+# 資料庫查詢優化 (Database Query Optimization)
+
+## 概述 (Overview)
+
+- 查詢優化是資料庫系統中的關鍵組件，負責尋找最有效率的方式執行使用者查詢
+- 一個好的查詢計畫可以比低效的計畫快上數個數量級
+- 查詢優化的目標：
+  - 理想情況：找到代價最低的執行計畫
+  - 實際情況：避免非常糟糕的執行計畫
+- 優化過程基本步驟：
+  1. 生成候選計畫
+  2. 估計每個計畫的執行代價
+  3. 選擇並執行代價最低的計畫
+
+## 代價估計 (Cost Estimation)
+
+- 代價度量標準主要是查詢延遲 (query delay)，同時較低的查詢延遲也意味著更好的系統吞吐量
+- I/O 延遲通常主導查詢延遲
+- 對每個計畫 p，我們估計 B(p)：執行相應查詢所需存取的塊數
+- 估計 B(p) 通常需要更多資訊：
+  - R(p)：輸出的記錄數
+  - 索引的搜尋代價 (如使用索引)
+  - V(p,f)：在 p 中欄位 f 的不同值數量
+
+### 基本計畫類型代價估計
+
+| 計畫類型              | 代價估計 B(p)                                      |
+| --------------------- | -------------------------------------------------- |
+| TablePlan             | 由 StatMgr 快取的實際塊數 (透過定期的表掃描)       |
+| ProjectPlan(c)        | B(c)                                               |
+| SelectPlan(c)         | B(c)                                               |
+| IndexSelectPlan(t)    | IndexSearchCost(R(t), R(p)) + R(p)                 |
+| ProductPlan(c1, c2)   | B(c1) + (R(c1) * B(c2))                            |
+| IndexJoinPlan(c1, t2) | B(c1) + (R(c1) * IndexSearchCost(R(t2), 1)) + R(p) |
+
+- B(c) 會遞歸地計算到表層級
+
+### 基數估計 (Cardinality Estimation)
+
+- 估計 R(p) 的過程稱為基數估計
+- 索引搜尋代價可透過特定索引的方法計算：
+  - HashIndex.searchCost()
+  - BTreeIndex.searchCost()
+
+#### 樸素的估計方法
+
+- 均勻分布假設：欄位中的所有值出現機率相同
+- 所需的統計資訊不多：
+  - R(c)：子計畫 c 中的記錄數
+  - V(c, f)：子計畫 c 中欄位 f 的不同值數量
+  - Max(c, f)：子計畫 c 中欄位 f 的最大值
+  - Min(c, f)：子計畫 c 中欄位 f 的最小值
+
+#### 選擇算子估計 (Select Estimation)
+
+- 對於 p = Select(c, f=x)：
+  - 選擇度 (Selectivity) = $\frac{1}{V(c,f)}$
+  - R(p) = 選擇度 * R(c)
+
+- 對於 p = Select(c, f>x)：
+  - 選擇度 = $\frac{Max(c,f)-x}{Max(c,f)-Min(c,f)}$
+  - R(p) = 選擇度 * R(c)
+
+#### 實際情況的問題
+
+- 在真實世界，欄位的值分布很少是均勻的
+- 例如：p = Select(c, f=14)
+  - 假設 V(c,f) = 15，估計 R(p) = $\frac{1}{15} * R(c) = 3$
+  - 但實際上 R(p) 可能是 9
+
+## 直方圖 (Histograms)
+
+- 直方圖能更準確地近似每個欄位中的值分布
+- 將欄位值劃分為一組桶 (buckets)
+- 桶數越多，近似越準確，但儲存代價也更高
+
+### 直方圖中的桶 (Buckets)
+
+- 每個桶 b 收集一個值範圍的統計資料
+- 假設桶內記錄和值均勻分布
+- 收集的統計資料：
+  - R(p, f, b)：記錄數
+  - V(p, f, b)：不同值數量
+  - Range(p, f, b)：值範圍
+
+### 使用直方圖的基數估計
+
+- 不論 p 是什麼，我們都有：
+  $R(p) = \sum_{b \in p.hist.buckets(f)} R(p, f, b)$
+
+#### 範圍選擇 (Range Selection)
+
+- 對於 p = Select(c, f in Range)，對於欄位 f 中的每個桶 b：
+  - 選擇度 = $\frac{|Range(c,f,b) \cap Range|}{|Range(c,f,b)|}$
+  - Range(p,f,b) = Range(c,f,b) ∩ Range
+  - V(p,f,b) = V(c,f,b) * 選擇度
+  - R(p,f,b) = R(c,f,b) * 選擇度
+
+- 對於欄位 f' ≠ f 中的每個桶 b：
+  - 縮減率 = $\frac{\sum_b R(p,f,b)}{R(c)}$
+  - Range(p,f',b) = Range(c,f',b)
+  - R(p,f',b) = R(c,f',b) * 縮減率
+  - V(p,f',b) = min(V(c,f',b), R(p,f',b))
+
+#### 笛卡爾積 (Product)
+
+- 對於 p = Product(c1, c2)：
+  - 對於 c1 中的每個 (b,f)：
+    - Range(p,f,b) = Range(c1,f,b)
+    - V(p,f,b) = V(c1,f,b)
+    - R(p,f,b) = R(c1,f,b) * R(c2)
+  - 對於 c2 中的每個 (b,f)：
+    - Range(p,f,b) = Range(c2,f,b)
+    - V(p,f,b) = V(c2,f,b)
+    - R(p,f,b) = R(c2,f,b) * R(c1)
+
+#### 連接選擇 (Join Selection)
+
+- 對於 p = Select(c, f=g) 或 Join(a, b, a.f=b.g)：
+  - 對於欄位 f 中的桶 b1 和欄位 g 中的桶 b2：
+    - Range(p,f,b1) = Range(p,g,b2) = IR = Range(c,f,b1) ∩ Range(c,g,b2)
+    - minV = min($\frac{|IR|*V(c,f,b1)}{|Range(c,f,b1)|}$, $\frac{|IR|*V(c,g,b2)}{|Range(c,g,b2)|}$)
+    - V(p,f,b1) = V(p,g,b2) = minV
+    - R(p,f,b1) = R(p,g,b2) = min(R1, R2)
+      - 其中 R1 = R(c,f,b1) * $\frac{minV}{V(c,f,b1)}$ * $\frac{1}{V(c,g,b2)}$ * $\frac{R(c,g,b2)}{R(c)}$
+      - 其中 R2 = R(c,g,b2) * $\frac{minV}{V(c,g,b2)}$ * $\frac{1}{V(c,f,b1)}$ * $\frac{R(c,f,b1)}{R(c)}$
+
+  - 對於欄位 f' ∉ {f, g} 中的每個桶 b：
+    - 縮減率 = $\frac{\sum_b R(p,f,b)}{R(c)}$
+    - R(p,f',b) = R(c,f',b) * 縮減率
+    - V(p,f',b) = min(V(c,f',b), R(p,f',b))
+    - Range(p,f',b) = Range(c,f',b)
+
+### 直方圖類型
+
+#### 等寬直方圖 (Equi-Width Histogram)
+
+- 劃分策略：所有桶具有相同範圍
+- 桶範圍 = $\frac{Max(p,f) - Min(p,f) + 1}{桶數}$
+- 問題：某些桶可能被浪費
+
+#### 等深直方圖 (Equi-Depth Histogram)
+
+- 劃分策略：所有桶具有相同記錄數
+- 深度 = $\frac{R(p)}{桶數}$
+- 問題：桶內的記錄/值可能不均勻分布
+
+#### 最大差異直方圖 (Max-Diff Histogram)
+
+- 劃分策略：在記錄數或面積具有最大差異的值處分割桶
+  1. 記錄數 (MaxDiff(F))：每個桶的記錄數均勻
+  2. 面積 (MaxDiff(A))：每個桶的記錄數和值均勻
+
+### VanillaCore 中的直方圖
+
+- 表直方圖是統計元數據
+- 位於 org.vanilladb.core.storage.metadata.statistics 包中
+- 透過 StatMgr.getTableStatInfo() 存取（由 TablePlan 使用）
+
+#### 建立直方圖
+
+- 系統啟動時：
+  - StatMgr 掃描表並呼叫 SampledHistogramBuilder.sample()
+  - 完成後，呼叫 SampledHistogramBuilder.newMaxDiffHistogram()
+  - 使用的直方圖類型：
+    - 數值欄位使用 MaxDiff(A)
+    - 其他類型使用 MaxDiff(F)
+
+- 運行時：
+  - StatMgr 追蹤每個表的更新記錄數
+  - QueryPlanner 在執行修改/插入/刪除查詢後呼叫 StatMgr.countRecordUpdates()
+  - 當呼叫 StatMgr.getTableStatInfo() 且更新記錄數超過閾值（例如100）時，背景重建直方圖
+  - StatisticsRefreshTask 掃描表並呼叫 SampledHistogramBuilder.sample()，然後呼叫 SampledHistogramBuilder.newMaxDiffHistogram()
+
+## 啟發式查詢優化器 (Heuristic Query Optimizer)
+
+### 基本計畫生成器 (Basic Planner)
+
+- 產品/連接順序遵循 SQL 中的寫法
+- 查詢優化有兩個常見的啟發式方法：
+  1. 下推選擇操作 (Pushing Select Down)
+  2. 貪婪連接排序 (Greedy Join Ordering)
+
+### 下推選擇操作 (Pushing Select Down)
+
+- 盡早執行選擇操作，以減少每個連接操作的記錄數 (R)
+- 例如轉換：
+  ```
+  SELECT * FROM t1, t2, t3 WHERE t1.f1 = t2.f2 AND t2.f3 = t3.f4 AND t1.f5 = x
+  ```
+  轉為：
+  ```
+  Select(t2.f3 = t3.f4)
+    Product
+      Select(t1.f1 = t2.f2)
+        Product
+          Select(t1.f5 = x)
+            Table t1
+          Table t2
+      Table t3
+  ```
+
+### 貪婪連接排序 (Greedy Join Ordering)
+
+- B(root) = B(p1) + (R(p1) * ...) + ...
+- 降低 B(root) 意味著降低 R(p1)
+- B(p1) = B(c1) + (R(c1) * ...) + ...
+- 降低 B(root) 也意味著降低 R(c1)
+- 因此 B(root) ∝ R(p1) + R(c1) + ...
+- 貪婪連接排序：反覆將表加入到「主幹」中，使得 R(trunk) 最小
+
+### VanillaCore 中的啟發式查詢計畫生成器
+
+- 在 HeuristicPlanner 中實現
+- 步驟 1：為每個提到的表/視圖創建 TablePlanner 對象
+- 步驟 2：選擇大小最小的計畫開始連接主幹
+- 步驟 3：反覆將計畫添加到連接主幹上
+  - 嘗試找出代價最低的連接計畫
+  - 如果沒有適用的連接，則使用笛卡爾積
+
+## Selinger 風格查詢優化器 (Selinger-Style Query Optimizer)
+
+### 啟發式計畫生成器的問題
+
+- 貪婪法的假設：降低 R(c1) 意味著降低 R(p1)
+- 但這可能不正確：連接率也很重要
+- 窮舉搜索最佳連接順序太昂貴：n 個連接的候選數為 O(n!)
+
+### Selinger 風格優化的原理
+
+- 使用遞歸和子問題最優性：
+  - B*({t1, t2, t3}) = min(B*({t1, t2} ⨝ t3), B*({t1, t3} ⨝ t2), B*({t2, t3} ⨝ t1))
+- 子最優性：
+  - 如果 B*({t1, t2}) = B(t1 ⨝ t2) <= B(t2 ⨝ t1)
+  - 則 B*({t1, t2} ⨝ t3) = B(t1 ⨝ t2 ⨝ t3) <= B(t2 ⨝ t1 ⨝ t3)
+- 可使用動態規劃避免重複計算
+
+### Selinger 優化器示例
+
+- 考慮連接 3 個關係：X, Y, Z
+
+1. 步驟 1：計算每個表的代價（含適當的選擇操作）
+   | 1-集合 | 最佳計畫          | 代價 |
+   | ------ | ----------------- | ---- |
+   | {X}    | Index Select Plan | 10   |
+   | {Y}    | Table Plan        | 30   |
+   | {Z}    | Select Plan       | 20   |
+
+2. 步驟 2：計算 2-way 連接的代價
+   | 2-集合 | 最佳計畫 | 代價 |
+   | ------ | -------- | ---- |
+   | {X, Y} | X ⨝ Y    | 159  |
+   | {X, Z} | Z ⨝ X    | 98   |
+   | {Y, Z} | Z ⨝ Y    | 77   |
+
+3. 步驟 3：計算 3-way 連接的代價
+   | 3-集合    | 最佳計畫  | 代價 |
+   | --------- | --------- | ---- |
+   | {X, Y, Z} | Z ⨝ X ⨝ Y | 100  |
+
+### 複雜度比較
+
+- 對於 n=8 的情況：
+  - 窮舉搜索：8! = 40,320 個候選
+  - Selinger 風格計畫生成器：2^8 = 256 個候選
+
+### VanillaCore 中的 SelingerLikeQueryPlanner
+
+- 位於 org.vanilladb.core.query.planner.opt 包中
+- 使用 AccessPath 類來表示每個子計畫
+- AccessPathId 是查找表的鍵，使用 sum of pow(2, tp.id) 來表示訪問路徑中的 k-集合
+- 使用 R(p1) + R(c1) + ... 來近似 B(root)
+- 逐層構建計畫，每層考慮所有可能的連接
