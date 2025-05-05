@@ -22,7 +22,10 @@
 
   1. **規劃與需求（Specification）**：收集、分析使用者需求，產出需求文件
   2. **設計與實現（Design & Implementation）**：從系統架構到程式碼撰寫
-  3. **驗證（Validation）**：單元測試（Unit Test）、整合測試（Integration Test）、系統測試（System Test）、驗收測試（Acceptance Test）
+  3. **驗證（Validation）**：單元測試（Unit Test）、整合測試（Integration Test）、系統測試（System Test）、驗收測試（Acceptance Test）、代碼審查(Code Review)、故障模式與影響分析(FMFA)、監管合規測試
+    - 單元測試: 需要達到多少的代碼覆蓋率
+    - 整合測試: 需要專注在模組間的接口和數據流
+    - 系統測試: 模擬各種故障場景
   4. **演進／維護（Evolution / Maintenance）**：修正缺陷、功能增強、效能優化
 
 ### 2.3 主要目標：高品質（High Quality）
@@ -50,7 +53,7 @@
 
 ### 2.5 V 模型（V-Model）
 
-* **核心概念**：左右對應的「驗證（Verification）」與「驗收（Validation）」
+* **核心概念**：左右對應的「驗證（Verification）」與「驗收（Validation）」，強調每個開發階段對應的驗證活動。
 * **架構圖**：
 ![](images/2025-05-04-21-05-52.png)
 * **適用**：高可靠度（safety-critical）系統，如醫療、航空、嵌入式
@@ -68,7 +71,7 @@
   3. 開發與驗證（Development & validation）
      ↓
   4. 規劃下一迴圈（Plan next iteration） ↺
-* **優點**：持續風險評估，適合大型專案
+* **優點**：持續風險評估，適合大型專案和核心複雜度高的專案
 * **缺點**：流程複雜，對小型專案過度
 
 ### 2.7 快速應用開發（RAD Model）
@@ -176,6 +179,97 @@
 ### 2.13 成熟度與標準（Maturity & Standards）
 
 * **CMMI（Capability Maturity Model Integration）**：五級能力成熟度
+  - 第1級 - 初始級 (Initial)
+    - 流程具有不可預測性，缺乏控制和反應性
+    - 沒有關鍵流程領域，屬於非正式且臨時性的階段
+
+  - 第2級 - 已管理級 (Managed)
+    流程已被規劃和執行，符合既定政策，並受到監控、控制及適當審查。
+
+    **關鍵流程領域：**
+    1. **需求管理 (Requirements Management)**
+      - 管理需求並識別與計劃和產品之間的不一致
+
+    2. **專案規劃 (Project Planning)**
+      - 建立和維護專案活動的計劃
+
+    3. **專案監控 (Project Monitoring and Control)**
+      - 了解專案的進展，以便在績效出現明顯偏差時採取糾正措施
+
+    4. **供應商協議管理 (Supplier Agreement Management)**
+      - 管理從供應商獲取的產品及服務
+
+    5. **測量與分析 (Measurement and Analysis)**
+      - 建立測量能力以支持管理需求
+
+    6. **流程與產品品質保證 (Process and Product Quality Assurance)**
+      - 提供員工和管理層對流程和相關工作產品的客觀洞察
+
+    7. **配置管理 (Configuration Management)**
+      - 建立和維護工作產品的完整性
+
+  - 第3級 - 已定義級 (Defined)
+    流程被清晰定義，並在整個組織中標準化，比第2級更詳細和嚴謹。
+
+    **關鍵流程領域：**
+    1. **需求開發 (Requirements Development)**
+      - 識別客戶需求、產品需求和產品組件需求
+
+    2. **技術解決方案 (Technical Solution)**
+      - 設計、開發和實施解決方案
+
+    3. **產品整合 (Product Integration)**
+      - 將產品組件組裝成完整產品
+
+    4. **驗證 (Verification)**
+      - 確保產品符合指定的需求
+
+    5. **確認 (Validation)**
+      - 確保產品滿足其預期的使用需求
+
+    6. **組織流程焦點 (Organizational Process Focus)**
+      - 規劃、實施組織的流程改進
+
+    7. **組織流程定義 (Organizational Process Definition)**
+      - 建立和維護一套可用的組織流程資產
+
+    8. **組織培訓 (Organizational Training)**
+      - 發展人員的技能和知識
+
+    9. **整合專案管理 (Integrated Project Management)**
+      - 根據組織調整的流程管理專案
+
+    10. **風險管理 (Risk Management)**
+        - 識別潛在問題並採取措施降低風險
+
+    11. **決策分析與解決 (Decision Analysis and Resolution)**
+        - 分析可能的決策並選擇方案
+
+  - 第4級 - 量化管理級 (Quantitatively Managed)
+    使用統計和其他量化技術控制流程，通過建立量化目標來預測流程績效。
+
+    **關鍵流程領域：**
+    1. **組織流程績效 (Organizational Process Performance)**
+      - 建立和維護對組織流程績效的量化理解
+
+    2. **量化專案管理 (Quantitative Project Management)**
+      - 量化管理專案以達到既定的品質和績效目標
+
+    3. **風險與機會管理(Risk and Opportunity Management)**
+    4. **因果分析與解決(Causal Analysis and Resolution)**
+
+  - 第5級 - 優化級 (Optimizing)
+    持續改進流程績效，使用創新方法和技術對流程進行優化。
+
+    **關鍵流程領域：**
+    1. **組織績效管理 (Organizational Performance Management)**
+      - 主動管理組織績效以滿足業務目標
+
+    2. **原因分析與解決 (Causal Analysis and Resolution)**
+      - 識別問題的原因並採取措施防止其再次發生
+
+    3. **組織創新與部署(Organizational Innovation and Deployment)**
+
 * **PSP（Personal Software Process）／TSP（Team Software Process）**：個人／團隊流程改進
 * **IEEE 1074**、**ISO/IEC 12207**：國際標準化流程
 
@@ -472,6 +566,13 @@
 * **Delphi 方法（Expert judgment）**：匿名專家共識
 * **黃金法則（Gamma rule）**：三點估算 t = (o + 4 m + p)/6
 * **第一階估算（First-Order Estimation）**：功能點數（FP）^ 指數（0.39–0.48）
+
+  **First-Order Estimation Power Parameter**
+  | Kind of Software | Best in Class | Average | Worst in Class |
+  | ---------------- | ------------- | ------- | -------------- |
+  | Systems          | 0.43          | 0.45    | 0.48           |
+  | Business         | 0.41          | 0.43    | 0.46           |
+  | Shrink-Wrap      | 0.39          | 0.42    | 0.45           |
 * **承諾式排程（Commitment-based）**：由開發者自行承諾日期
 * **雙倍法則（Glenn's rule）**：自身估時 × 2，再加15–20％
 * **立方根法則**：排程 ≈ 3 × (man-months)^(1/3)
@@ -611,6 +712,11 @@
 * 定義：控制流圖中判斷節點數量所代表的獨立路徑數
 * 計算方式：V(G)=e–n+2 （e＝邊數，n＝節點數）或「封閉區域＋1」
 * 指標：V(G)>10 需加強測試，V(G)>20 需警戒
+  接近警戒值或超過警戒值的測試策略應該要包含以下:
+  - 詳細的單元測試，覆蓋所有獨立路徑
+  - 基於路徑的測試（Path testing）
+  - 代碼審查（Code review）和走查（Walkthrough）
+  - 整合測試與系統測試的嚴格規劃
 * 工具：Visual Studio、SonarQube、McCabe IQ …
 
 ### 代碼複雜度度量工具比較
@@ -648,7 +754,8 @@
   3. FP = UFC × TCF
 * 優點：語言無關；貼近使用者價值
 * 缺點：主觀性高；需專業認證
-
+* 功能點分析法:
+  總功能點/每人每月的功能點處理量
 * **功能點計數標準化**：
   * IFPUG 4.3標準 - 最廣泛使用
   * NESMA標準 - 荷蘭標準，支持估算FP
@@ -746,7 +853,7 @@
   * **Embedded**（高複雜度嵌入式）
 * 公式：
 
-  $\text{Effort} = a \cdot (\text{KLOC})^b$
+  $\text{Effort(人月)} = a \cdot (\text{KLOC})^b$
 
   $\text{Duration} = c \cdot (\text{Effort})^d$
 
