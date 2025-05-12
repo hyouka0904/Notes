@@ -110,10 +110,12 @@
    - 例如："ID"
 
 ### ER 模型 (ER Model)
+用來在概念層次上描述實體（Entity）、屬性（Attribute）與實體間的關係（Relationship）。
 1. **識別實體之間的關係 (Identify relationships)**
    - 例如：朋友關係 (N-N)，發帖關係 (1-N)
 
 ### 關係模型 (Relational Model)
+用「關係表」（relation）與「欄位」（column）去具體實現 ER 模型所定義的實體與關係。
 1. **關係作為外鍵 (Relationships as foreign keys)**
    - 1-1 和 1-N 關係直接用外鍵表示
    - N-N 關係需要中間關係表
@@ -139,6 +141,7 @@
 - 表/關係適用於所有類型的實體類
 - 主鍵/外鍵適用於實體間的所有類型關係
 - 關係模式是邏輯的，而非物理存儲方式
+  換言之，關係模式只關心資料模型本身（表格與欄位），不管資料在磁碟上怎麼排放和存取；實際系統會再把這個模式映射到適合的檔案結構和索引設計上，才是物理存儲。
 
 ## 學生數據庫練習 (Student DB Exercise)
 
@@ -224,6 +227,8 @@ CREATE TABLE users (
 - 特性：
   - 唯一性（unique）- 每筆記錄的主鍵值不得重複
   - 通常使用 `serial` 型態（自動填入的整數）
+    - serial 是一種方便的「自動遞增整數」欄位型態，用來當作主鍵（PRIMARY KEY）時，可確保每一列都有唯一且連續的整數值。
+    - 插入新資料時，如果不指定該欄位的值，資料庫會呼叫這個 sequence 的 nextval()，自動取出下一個整數（從 1 開始，依序加 1）。
   - 系統會自動為主鍵建立索引（index automatically created）
 
 ### 外部鍵（Foreign Key）
@@ -278,6 +283,14 @@ SELECT AVG(karma) FROM users; -- 計算 users 資料表中 karma 欄位的平均
 SELECT MIN(karma) FROM users;  -- 找出 users 資料表中 karma 欄位的最小值
 ```
 - 這些函數常與 `GROUP BY` 子句一起使用進行分組統計
+  ```sql
+  SELECT 
+    country, 
+    COUNT(*)       AS user_count, 
+    AVG(karma)     AS avg_karma
+  FROM users
+  GROUP BY country;
+  ```
 
 ### 進階查詢語法
 ```sql
@@ -349,6 +362,17 @@ public class HelloThread extends Thread {
 
 - 系統為`run()`方法分配新的堆疊（stack），與`main()`方法的堆疊分開
 - CPU會平行執行`run()`方法和`main()`方法
+  
+  1. **`main()`**
+
+     * 是 JVM 啟動後，在主執行緒（主 Thread）上執行的入口方法。
+     * 它所在的執行緒即「主執行緒」。
+
+  2. **`run()`**
+
+     * 定義在你自己建立的 `Thread` 類別或 `Runnable` 物件裡。
+     * 當你呼叫 `new Thread(...).start()` 時，JVM 會在新的執行緒上呼叫該物件的 `run()` 方法——**不是**另外開一個進程。
+
   → 這實現了真正的並行處理
   → 在多核心處理器上，這些執行緒可能真正同時運行
   → 在單核心處理器上，作業系統會透過時間片段（time slicing）來模擬並行性
@@ -784,6 +808,29 @@ VanillaCore 架構分為多個層級：
    - 客戶端應在不再需要數據庫時盡快關閉連接
 
 ### 5.2 Java RMI（Remote Method Invocation）
+**伺服器端（Server VM）**
+
+* **遠程對象（Remote Object）本體**：實際的方法實現，部署在伺服器上
+* **骨架（Skeleton）**：由伺服器線程運行，負責接收存根送來的呼叫、解封參數，並將執行交給工作線程
+* **工作線程池（Worker Thread Pool）**：在伺服器上，實際執行遠程對象方法並將結果回傳給骨架
+
+**客戶端（Client VM）**
+
+* **存根（Stub）**：位於客戶端，擔任遠程對象的代理；客戶端呼叫存根的方法時，存根將呼叫封包化並透過網路送到伺服器
+* **客戶端線程**：執行存根代理呼叫，當呼叫被發送後，該線程會阻塞直到接收到回應
+
+---
+
+簡化對應關係：
+
+| 元件             | 運行位置 | 作用                             |
+| ---------------- | -------- | -------------------------------- |
+| 遠程對象本體     | 伺服器   | 真正的方法實現                   |
+| 骨架（Skeleton） | 伺服器   | 接收、解封參數，呼叫工作線程執行 |
+| 工作線程池       | 伺服器   | 執行遠程方法並回傳結果           |
+| 存根（Stub）     | 客戶端   | 封裝呼叫、傳送並解封伺服器回應   |
+| 客戶端線程       | 客戶端   | 執行存根呼叫並等待伺服器結果     |
+
 - Java RMI允許在服務器VM上的對象方法被客戶端VM遠程調用
   - 稱為遠程對象（remote object）
 - 存根（Stub）和骨架（Skeleton）機制：
@@ -799,7 +846,8 @@ VanillaCore 架構分為多個層級：
 - **RMI註冊表（Registry）**：
   - 服務器必須先將遠程對象的接口綁定到註冊表，並附加名稱
     - 接口必須擴展java.rmi.Remote接口
-  - 客戶端在註冊表中查找名稱以獲取存根
+    - RMI 註冊的就是伺服器端那支遠程物件及它暴露出來的方法介面（interface），如果這隱含地是執行 SQL 查詢的函式，那麼註冊的就是「那組查詢方法」。
+  - 客戶端在註冊表中查找名稱以獲取存根，客戶端拿到 Stub 後就可以呼叫這些方法來執行查詢
 
 - **注意事項**：
   - 客戶端線程與工作線程是同步的
@@ -893,16 +941,21 @@ VanillaCore 架構分為多個層級：
 - 可直接通過註冊表或間接通過方法返回獲得
 
 ### 5.8 啟動（StartUp）
-- StartUp提供main()方法，將VanillaCore作為JDBC服務器運行
-  - 調用VanillaDB.init()
-    - 通過靜態變量共享全局資源
-  - 將RemoteDriver綁定到RMI註冊表
-    - 每個連接一個線程
+- StartUp 提供 main() 方法，將 VanillaCore 作為 JDBC 伺服器運行  
+  - 調用 `VanillaDB.init()`，通過靜態變量共享全局資源  
+- 將 **一個** `RemoteDriver` 實例綁定到 RMI 註冊表（只執行一次）  
+  ```java
+  Registry reg = LocateRegistry.createRegistry(1099);
+  RemoteDriver driver = new RemoteDriverImpl();
+  reg.rebind("vanilladb-jdbc", driver);
+  ```
+  > 註冊表中只有一個 `RemoteDriver`，真正隨連線數量增長的是多個 `RemoteConnectionImpl` 和它們對應的執行緒，而非多個 driver。
 
 ### 5.9 引擎中的線程處理（Threading in Engines）
 - 一般而言：
   - 查詢引擎（query engine）中的類是線程本地的
   - 存儲引擎（storage engine）中的類是線程安全的
+> 「線程本地」（thread-local）指的是某些資料或物件的實例 對每條執行緒各自獨立，互不共用。每個執行緒都會有自己的副本（或自己的實例），不同執行緒無法直接訪問或影響對方的資料。
 
 # 查詢處理 (Query Processing)
 
@@ -1001,6 +1054,11 @@ VanillaCore 架構分為多個層級：
 * **解析樹（Parse Tree）**:
   * 描述字串如何屬於特定語法類別
   * 語法類別作為內部節點，詞法單元作為葉節點
+    - 文法規則左側（非終結符〈nonterminal〉）作為一個內部節點。
+    - 文法規則右側的每個符號（終結符〈terminal〉或非終結符）都成為它的子節點：
+      - 如果是終結符，就會是葉節點（leaf）。
+      - 如果是非終結符，則會是另一個內部節點，並繼續以該符號為左側展開下去。
+
   * 類別節點的子節點對應於文法規則的應用
   * 解析演算法用於驗證給定字串是否在語法上合法
 
@@ -1654,18 +1712,28 @@ BlockId blk2 = p2.append("student.tbl");
   * 如何確定哪些交易要回滾？
   * 如何回滾交易所做的所有動作？
 
-### 預寫日誌 (Write-Ahead-Logging, WAL)
 
-* 記錄每個交易修改的日誌
-  * 例如：<SETVAL, <TX>, <BLK>, <OFFSET>, <VAL_TYPE>, <OLD_VAL>>
-  * 在記憶體中以節省I/O
-* 提交交易：
-  1. 在刷新緩衝區前將所有相關日誌寫入日誌文件
-  2. 刷新後，將<COMMIT, <TX>>日誌寫入日誌文件
-* 交換髒緩衝區：
-  * 在刷新用戶區塊前必須刷新所有日誌
-* 確定回滾交易：沒有COMMIT日誌的交易
-* 如何回滾：撤銷已記錄到磁盤的操作，刷新所有受影響的區塊，然後寫入<ROLLBACK, <TX>>日誌
+### 預寫日誌（Write-Ahead Logging, WAL）
+
+- **記錄每個交易修改的日誌**，例如：  
+```
+<SETVAL>, <TX>, <BLK>, <OFFSET>, <VAL_TYPE>, <OLD_VAL>
+```
+日誌初期先保存在記憶體中，以減少 I/O 次數。
+
+- **提交交易（Commit）**：  
+1. 在刷新緩衝區（buffer pool）前，將所有與該交易相關的修改日誌寫入日誌檔（log file）。  
+2. 緩衝區刷新完成後，寫入 `<COMMIT>, <TX>` 日誌到日誌檔。
+
+- **交換髒緩衝區（Flushing Dirty Buffers）**：  
+- 在將髒頁（dirty page）寫回磁碟前，必須先將對應的日誌寫入並刷新到磁碟。
+
+- **回滾交易（Rollback）**：  
+- 所有沒有 `<COMMIT>` 日誌的交易都視為未提交，必須回滾。  
+- 回滾步驟：  
+  1. 撤銷（undo）已寫入磁碟的修改。  
+  2. 刷新所有受影響的資料區塊。  
+  3. 寫入 `<ROLLBACK>, <TX>` 日誌。
 
 ### WAL的假設
 
@@ -1761,15 +1829,22 @@ BlockId blk2 = p2.append("student.tbl");
 * 每個交易都有自己的BufferMgr
 * 在創建交易時通過`transactionMgr.newTransaction(...)`構建
 * 通過`transaction.bufferMgr()`獲取
-* 交易的BufferMgr負責跟踪哪些緩衝區被交易固定，在沒有可用緩衝區時讓交易等待
+* 交易的BufferMgr負責跟踪哪些緩衝區被該交易固定，在沒有可用緩衝區時讓交易等待
 * `flush()`刷新被指定交易修改的每個緩衝區
 * `available()`返回持有未固定緩衝區的緩衝區數量
+* 當交易呼叫讀／寫頁面時，`BufferMgr` 會先向全域的 `BufferPoolMgr` 請求（pin）對應的頁面緩衝區；如果沒有可用的 frame，就讓交易等待。
+* 當 `BufferMgr` 向 `BufferPoolMgr.pin()` 請求卻拿不到 frame，就會讓交易進入等待狀態，直到有其他交易呼 `unpin()` 釋放空間並喚醒它。
+   * 交易完成或發生錯誤時，`BufferMgr.flush()` 與 `BufferMgr.unpinAll()` 會依序將修改過的頁面刷新到磁碟並解除所有固定，通知 `BufferPoolMgr` 回收資源。
 
 ### BufferPoolMgr
 
 * BufferPoolMgr是一個單例對象，對外部世界隱藏在buffer包中
 * 它為所有頁面管理緩衝池，並實現時鐘緩衝區替換策略
   * 磁盤存取的細節對客戶端未知
+* 管理整個緩衝池的所有 frame，並用時鐘（Clock）演算法決定哪個 frame 可以被替換。
+   * `pin(page)`：鎖定某個頁面到緩衝池，如果已在池中就增加固定計數，否則載入頁面；若空間不足，根據 Clock 算法選擇可替換的 frame，必要時使請求交易阻塞。
+   * `unpin(page)`：解除固定計數，若變成 0，就標記為可替換。
+   * `available()`：回報當前「尚未被任何交易固定」的 frame 數量。
 
 ### Buffer
 
@@ -1944,7 +2019,7 @@ BlockId blk2 = p2.append("student.tbl");
 ### 2.2 寫-讀衝突異常 (Write-Read Conflict Anomalies)
 - 讀取未提交數據（髒讀）
 - 不可恢復的排程
-  - 如果T1中止，會導致連鎖回滾問題
+  - 如果T1(未提交)中止，會導致連鎖回滾問題
 
 ### 2.3 讀-寫衝突異常 (Read-Write Conflict Anomalies)
 - 不可重複讀問題 (Unrepeatable Reads)
@@ -1959,6 +2034,34 @@ BlockId blk2 = p2.append("student.tbl");
 - 確保衝突可序列化性 (Conflict Serializability)
 - 也需要確保可恢復性 (Recoverability)
   - 定義：若每個交易T僅在其讀取變更的所有交易提交後才提交，則排程是可恢復的
+  **可恢復排程的範例**
+
+  假設有兩個事務 T1、T2 操作同一資料項 X，以下是可恢復的排程 S：
+
+  | 執行順序 | 操作    | 說明                  |
+  | -------- | ------- | --------------------- |
+  | 1        | `w1(X)` | T1 寫入 X             |
+  | 2        | `r2(X)` | T2 讀取 T1 未提交的 X |
+  | 3        | `c1`    | T1 提交（Commit）     |
+  | 4        | `c2`    | T2 提交               |
+
+  * T2 只在讀取到的變更（來自 T1）提交後，才自己提交，符合「可恢復」定義。
+
+  ---
+
+  **不可恢復排程的對比**
+
+  若改成以下排程 S′，則非可恢復：
+
+  | 執行順序 | 操作    | 說明                  |
+  | -------- | ------- | --------------------- |
+  | 1        | `w1(X)` | T1 寫入 X             |
+  | 2        | `r2(X)` | T2 讀取 T1 未提交的 X |
+  | 3        | `c2`    | T2 提交               |
+  | 4        | `a1`    | T1 中止（Abort）      |
+
+  * T2 在 T1 尚未提交就已提交，一旦 T1 中止，T2 就讀到「髒值」且無法回滾，排程不可恢復。
+
 
 ## 3. 基於鎖的併發控制 (Lock-based Concurrency Control)
 
@@ -1970,17 +2073,64 @@ BlockId blk2 = p2.append("student.tbl");
 ### 3.2 二階段鎖協議 (Two-Phase Locking Protocol, 2PL)
 - 定義兩種鎖:
   - 共享鎖 (Shared Lock, S)
+  允許多個交易同時持有，用於讀取。
   - 排他鎖 (Exclusive Lock, X)
+  獨佔持有，用於寫入；任何其他交易的 S 或 X 請求都必須等到它釋放。
 - **階段1：增長階段**
   - 交易必須在讀取（寫入）對象前獲得S（X）鎖
 - **階段2：收縮階段**
   - 交易一旦釋放任何鎖，就不能請求額外的鎖
 - 確保衝突可序列化性
 
+```
+時間→      1      2      3      4      5      6      7      8
+        ──────────────────────────────────────────────────────────
+T1       ├─S-lock(X)───┐                            ├─unlock(X)
+         │ read(X)     │
+         └─────────────┘
+
+T2               ├─S-lock(X)──┐                   ├─unlock(X)
+                  │ read(X)    │
+                  └────────────┘
+
+T3                      ├─X-lock(X)─────────────────├─unlock(X)
+                         │ write(X)                 │
+                         └──────────────────────────┘
+```
+
+* **步驟 1**：T1 向資料項 X 請求 **S-lock**，成功後執行 `read(X)`
+* **步驟 2**：T1 `read` 完畢並 **保持** S-lock（尚未釋放）
+* **步驟 3**：T2 向 X 請求 **S-lock**，因為 S-lock 可共存，立刻成功，執行 `read(X)`
+* **步驟 4**：T1 釋放 S-lock；T2 此時仍持有自己的 S-lock
+* **步驟 5**：T2 讀完後釋放 S-lock
+* **步驟 6**：T3 向 X 請求 **X-lock**，此時沒有其他鎖，成功取得，執行 `write(X)`
+* **步驟 7**：T3 寫完後釋放 X-lock
+
+---
+
+再舉一個衝突例子，當 T1 持有 X-lock 時，任何新的 S-lock 或 X-lock 請求都必須等它釋放：
+
+```
+時間→      1      2      3      4      5
+        ────────────────────────────────
+T1       ├─X-lock(Y)─────────────┐     ├─unlock(Y)
+         │ write(Y)              │
+         └───────────────────────┘
+
+T2               ├─S-lock(Y)──────┐     ├─unlock(Y)
+                  (blocked until T1 unlock)
+```
+
+* T1 在步驟 1 取得 Y 的 **X-lock**，讀寫 Y
+* T2 在步驟 2 請求 Y 的 **S-lock**，但因 X-lock 獨佔，必須等 T1 在步驟 5 釋放後才能取得
+
+---
+
 ### 3.3 嚴格二階段鎖 (Strict Two-Phase Locking, S2PL)
-- 交易獲取鎖如2PL增長階段，但保持所有鎖直到完成
+- 交易獲取鎖如2PL增長階段，但保持所有鎖直到完成，所有的讀鎖和寫鎖都要「等到交易結束（Commit 或 Abort）」才一次性全部釋放。
 - 允許嚴格 (Strict) 和可序列化排程
 - 避免級聯回滾 (Cascading Rollbacks)
+  由於其他交易永遠不可能讀到一個已被寫但尚未提交的版本(因為鎖一直被拿著直到提交)，Strict 2PL 自動杜絕了讀到未提交資料（Dirty Read）所造成的連鎖回滾問題。
 - 仍存在死鎖問題 (Deadlock Problem)
 
 ### 3.4 解決死鎖 (Coping with Deadlocks)
