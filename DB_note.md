@@ -2867,3 +2867,200 @@ T2               ├─S-lock(Y)──────┐     ├─unlock(Y)
 - AccessPathId 是查找表的鍵，使用 sum of pow(2, tp.id) 來表示訪問路徑中的 k-集合
 - 使用 R(p1) + R(c1) + ... 來近似 B(root)
 - 逐層構建計畫，每層考慮所有可能的連接
+
+# 向量數據庫系統 (Vector Database Systems)
+
+## 1. 為何需要向量數據庫系統 (Why Vector DBMS?)
+
+### 人工智能與嵌入向量的出現 (The Emerge of AI & Embeddings)
+
+- 嵌入向量 (Embeddings) 被廣泛應用於：
+  - 搜索引擎 (Search engines)
+  - 推薦系統 (Recommender systems)
+  - 個性化廣告 (Personalized ads)
+  - 其他基於相似度的應用
+
+- 面臨的核心挑戰：如何存儲並高效搜索數十億級別的嵌入向量？
+
+### AI社區的近似K最近鄰 (AKNN) 庫
+
+- 著名的開源實現：
+  - Facebook的Faiss (Facebook Faiss)
+  - 微軟的SPTAG (Microsoft SPTAG)
+  - Spotify的Annoy (Spotify Annoy)
+
+- 優點：
+  - 計算優化
+  - 支持SIMD指令集 (SSE, AVX, AVX2)
+  - Faiss甚至支持GPU加速
+
+- 缺點：
+  - 假設數據僅存儲在內存中
+  - 不支持動態數據（更新/刪除）
+  - 不支持屬性過濾（如 "100 < 價格 < 200"）
+
+## 2. 近似K最近鄰搜索算法 (AKNN Search Algorithms)
+
+### AKNN搜索定義
+
+- 給定查詢向量q，找到存儲中與q距離最近的k個向量V={v₁, v₂, ..., vₖ}
+- 距離測量可使用：
+  - 歐幾里得距離 (Euclidean distance)
+  - 餘弦相似度 (Cosine similarity)
+  - 其他距離度量
+- 評價標準：召回率 (Recall)
+  - 令V*為真實最近鄰
+  - 召回率 = |V∩V*| / |V*|
+
+### 主要AKNN算法類型
+
+1. **基於樹的方法 (Tree-based)**
+   - KD樹 (KD-tree)、R樹 (R-tree)
+   - 缺點：在高維數據上運行緩慢
+
+2. **基於量化的方法 (Quantization-based)**
+   - IVF_FLAT/SQ8/PQ
+   - 優點：高召回率，碼本對更新不敏感
+
+3. **基於圖的方法 (Graph-based)**
+   - HNSW、NSG、SSG 
+   - 優點：高召回率
+   - 缺點：圖需要時間/空間來維護
+
+4. **局部敏感哈希 (Locality sensitive hashing, LSH)**
+   - 缺點：低召回率
+
+### IVF_FLAT/SQ8/PQ詳解
+
+- 基本原理：將向量分成多個聚類，在聚類中搜索
+- 搜索方式：
+  - FLAT：暴力搜索 (Brute force)
+  - SQ8：壓縮向量搜索 (Compressed)
+  - PQ：子向量量化搜索 (Quantization of subvectors)
+
+## 3. 系統級挑戰 (Challenges at System-level)
+
+- 主要挑戰包括：
+  - 如何支持磁盤存儲
+  - 如何處理動態數據（更新/刪除）
+  - 如何實現屬性過濾
+  - 如何提高搜索性能
+
+## 4. 案例研究：PASE (Case study: PASE)
+
+### PASE簡介
+
+- "PostgreSQL Ultra-High-Dimensional Approximate Nearest Neighbor Search Extension"，發表於SIGMOD'20
+- 一個PostgreSQL擴展，可應用於任何類System R數據庫
+- 優點：
+  - 支持磁盤存儲
+  - 支持動態數據
+  - 支持屬性過濾
+
+### 數據模型與查詢格式 (Data model & Query Format)
+
+- 數據模型：將向量作為表中的一個字段
+  - 類型定義：`float_vector(d)`，d為維度
+
+- 索引創建示例：
+  ```sql
+  CREATE INDEX idx_text ON posts(text_vector)
+  USING ivf_flat;
+  ```
+
+- AKNN查詢語法：
+  ```sql
+  SELECT p.id,
+         p.text_vector <-> '...' AS dist
+  FROM posts AS p
+  ORDER BY dist ASC LIMIT 10;
+  ```
+
+### 索引建立與更新 (Index Building & Update)
+
+- **IVF_FLAT索引建立**：
+  - 每個頁面是緩衝和搜索的單位
+  - 數據組織：元數據頁、聚類中心頁、數據頁
+
+- **索引更新**：
+  - 如果數據分佈沒有改變，不做任何操作
+  - 否則，為幾個迭代繼續聚類
+
+### 規劃與成本估算 (Planning & Cost Estimation)
+
+- 在代數樹中引入新的SortPlan節點，需要估計其成本
+- **IVF_FLAT成本估算**：
+  - 選擇頂部聚類：B(聚類文件)
+  - 掃描每個聚類：B(聚類的數據文件)
+
+- **屬性過濾**：
+  ```sql
+  SELECT p.id,
+         p.text_vector <-> '...' AS dist
+  FROM posts AS p
+  WHERE p.date < '...'
+  ORDER BY dist ASC LIMIT 10;
+  ```
+  
+- 三種執行策略：
+  - 策略A：首先屬性搜索，然後向量全表掃描
+  - 策略B：首先屬性搜索，然後向量索引搜索
+  - 策略C：首先向量索引搜索，然後屬性全表掃描
+  - 根據估計成本選擇最佳策略
+
+## 5. 案例研究：Milvus (Case study: Milvus)
+
+### Milvus簡介
+
+- "Milvus: A Purpose-Built Vector Data Management System"，發表於SIGMOD'21
+- 一個專為向量數據管理設計的系統
+- 優點：
+  - 支持磁盤存儲、動態數據、屬性過濾
+  - 性能遠高於PASE
+
+### 存儲與一致性模型 (Storage & Consistency Model)
+
+- **存儲模型**：
+  - 基於日誌結構合併樹 (Log Structured Merge Tree, LSM) 的列式存儲
+  - 使用外部更新 (Out-of-place updates)
+  - 可排序表 (SSTables) 是緩衝/搜索的單位
+
+- **一致性模型：快照隔離 (Snapshot Isolation)**
+  - 每次更新創建新的數據版本
+  - 讀取者讀取數據的一致性快照
+    - 不總是最新的
+    - 不會被寫入者阻塞
+  - Milvus維護LSM樹的快照：
+    - 快照1：{segment 1}
+    - 快照2：{segment 1, segment 2}
+    - 快照3：{segment 2, segment 3, segment 4}
+    - ...
+
+### 計算與線程 (Computing & Threads)
+
+- **線程模型**：
+  - PASE：每個請求分配一個線程
+    - 導致L3緩存命中率低
+  - Milvus：
+    - 同時處理m個請求
+    - 對L3中的每個緩存段使用一個線程
+    - 每個查詢s：
+      1. 每個線程t輸出臨時AKNN結果到堆H_t,s (在L3緩存)
+      2. 然後合併所有堆以獲得最終AKNN結果
+    - 實現1.5~2.7倍的速度提升
+
+- **計算優化**：
+  - 兩個向量之間的距離計算涉及許多可並行的浮點運算
+  - Milvus支持硬件加速：
+    - CPU上的SIMD指令：SSE, AVX, AVX2, AVX512
+    - GPU、多GPU支持
+    - 平衡GPU加速與總線傳輸延遲
+
+### 查詢算法 (Query Algorithms)
+
+- **查詢規劃**：
+  - PASE：基於成本的選擇（策略A、B、C）
+  - Milvus：基於分區的策略
+    - 根據頻繁查詢的屬性進行分區
+    - 實現13倍的速度提升
+
